@@ -18,6 +18,14 @@
 | Use Flyway as the only schema creator | JPA validates migrations rather than generating tables, so upgrades are explicit and testable. |
 | Expose `/status` instead of adding an actuator dependency | A minimal local JSON status endpoint meets the Phase 1 health requirement without expanding the operational surface. |
 | Use H2 `AUTO_SERVER=TRUE` without `DB_CLOSE_ON_EXIT` | H2 2.3 rejects that option combination. The retained setting supports the local file database without relying on a shutdown option. |
+| Keep `ProblemPattern`'s composite key | The existing architecture and migration use `(problem_id, pattern_id)` as the natural unique identity. The entity remains explicit and stores association metadata, avoiding an unnecessary key migration while supporting many-to-many extension. |
+| Evolve the seeded catalogue through a new Flyway migration | Existing local databases may already be at V2. V3 adds the richer pattern fields, typed category values, constraints, and corrected Binary Search seed without rewriting migration history. |
+| Generate all 13 `StageAssessment` drafts when an Attempt starts | A fixed set makes missing cognitive evidence visible, supports resumable drafts, and prevents a solved-problem outcome from standing in for unrecorded reasoning. |
+| Require an explicit 0–2 score for every stage before completion | An empty answer may be completed as score 0, but cannot be silently skipped. This records inability as learning evidence while preserving the 13-stage model. |
+| Allow edits while an Attempt is in progress; make completed Attempts immutable | Learners can correct drafts during a session, but completed evidence and duration remain stable for later analytics and review scheduling. |
+| Store required operations in a normalized collection table | Operation selections stay queryable for future bottleneck and data-structure analysis, unlike a serialized text field. |
+| Persist explicit pattern reveal per Attempt | The workspace hides pattern tags by default. A learner can consciously reveal them; the timestamp remains an extension point for Phase 4 hint-usage validation without implementing hints now. |
+| Treat score 1 as self-reported assistance in Phase 3 | Hints are not implemented yet. The score retains its meaning and can later be checked against `HintUsage` rather than being blocked until Phase 4. |
 
 ## Algorithms and policy
 

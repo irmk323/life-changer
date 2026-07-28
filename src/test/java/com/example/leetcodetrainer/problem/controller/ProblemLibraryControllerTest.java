@@ -28,7 +28,8 @@ class ProblemLibraryControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(view().name("problems/library"))
                 .andExpect(model().attributeExists("problems", "categories", "difficulties"))
-                .andExpect(content().string(containsString("Daily Temperatures")));
+                .andExpect(content().string(containsString("Daily Temperatures")))
+                .andExpect(content().string(containsString("Monotonic stack")));
     }
 
     @Test
@@ -37,5 +38,12 @@ class ProblemLibraryControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("Two Sum")))
                 .andExpect(content().string(org.hamcrest.Matchers.not(containsString("Daily Temperatures"))));
+    }
+
+    @Test
+    void rendersProblemDetailWithItsPrimaryPattern() throws Exception {
+        mockMvc.perform(get("/problems/20000000-0000-0000-0000-000000000008"))
+                .andExpect(status().isOk()).andExpect(view().name("problems/detail"))
+                .andExpect(content().string(containsString("Monotonic stack")));
     }
 }

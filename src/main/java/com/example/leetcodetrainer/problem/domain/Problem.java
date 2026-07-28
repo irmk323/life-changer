@@ -33,7 +33,8 @@ public class Problem {
     private Difficulty difficulty;
 
     @Column(nullable = false)
-    private String neetcodeCategory;
+    @Enumerated(EnumType.STRING)
+    private NeetcodeCategory neetcodeCategory;
 
     @Column(nullable = false)
     private boolean active;
@@ -48,7 +49,7 @@ public class Problem {
     }
 
     public Problem(UUID id, Integer leetcodeNumber, String title, String slug, String externalUrl,
-                   Difficulty difficulty, String neetcodeCategory, boolean active,
+                   Difficulty difficulty, NeetcodeCategory neetcodeCategory, boolean active,
                    Instant createdAt, Instant updatedAt) {
         this.id = id;
         this.leetcodeNumber = leetcodeNumber;
@@ -68,6 +69,6 @@ public class Problem {
     public String getSlug() { return slug; }
     public String getExternalUrl() { return externalUrl; }
     public Difficulty getDifficulty() { return difficulty; }
-    public String getNeetcodeCategory() { return neetcodeCategory; }
+    public NeetcodeCategory getNeetcodeCategory() { return neetcodeCategory; }
     public boolean isActive() { return active; }
 }

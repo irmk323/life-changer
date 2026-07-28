@@ -1,0 +1,6 @@
+package com.example.leetcodetrainer.attempt.domain;
+
+public enum AttemptType {
+    INITIAL, SAME_PROBLEM_REVIEW, ISOMORPHIC_TRANSFER, CONTRAST_CLASSIFICATION,
+    MIXED_CLASSIFICATION, COLD_SOLVE, IMPLEMENTATION_ONLY
+}

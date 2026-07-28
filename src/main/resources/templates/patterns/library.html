@@ -1,0 +1,7 @@
+<!doctype html>
+<html lang="ja" xmlns:th="https://www.thymeleaf.org">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>パターン一覧</title><link rel="stylesheet" th:href="@{/css/app.css}"></head>
+<body><main class="page"><header class="site-header"><a class="brand" th:href="@{/}">LeetCode Thinking Trainer</a><nav><a th:href="@{/problems}">問題一覧</a><a th:href="@{/patterns}">パターン一覧</a></nav></header>
+<section class="page-heading"><p class="eyebrow">再利用可能な思考スキーマ</p><h1>パターン一覧</h1><p>問題名と解法を結びつけるのではなく、関係・状態・操作・不変条件を再利用します。</p></section>
+<div class="problem-grid"><article class="problem-card" th:each="pattern : ${patterns}"><p class="eyebrow" th:text="${pattern.code}">HASH_LOOKUP</p><h2 th:text="${pattern.name}">Hash Lookup</h2><p th:text="${pattern.description}">説明</p><p><span th:text="${relatedProblemCounts[pattern.id] ?: 0}">0</span> 件の関連問題</p><a th:href="@{/patterns/{id}(id=${pattern.id})}">思考要素を見る</a></article></div>
+</main></body></html>
