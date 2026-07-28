@@ -1,0 +1,31 @@
+:root { color-scheme: light; font-family: Inter, ui-sans-serif, system-ui, sans-serif; color: #1f2937; background: #f7f7f5; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+a { color: #155e75; }
+.page { width: min(1040px, calc(100% - 2rem)); margin: 0 auto; padding: 1.5rem 0 4rem; }
+.site-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; border-bottom: 1px solid #d6d3d1; padding-bottom: 1rem; }
+.brand { color: #0f172a; font-weight: 750; text-decoration: none; }
+nav { display: flex; gap: 1rem; }
+.hero { max-width: 760px; padding: 5rem 0 2.5rem; }
+h1 { font-size: clamp(2rem, 5vw, 3.6rem); letter-spacing: -0.04em; line-height: 1.05; margin: .35rem 0 1rem; }
+h2 { margin-bottom: .4rem; }
+.hero p, .page-heading p, .notice p { font-size: 1.1rem; line-height: 1.6; color: #4b5563; }
+.eyebrow { color: #0f766e; font-size: .85rem; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
+.button { display: inline-block; border: 0; border-radius: .4rem; background: #0f766e; color: white; cursor: pointer; font: inherit; padding: .7rem 1rem; text-decoration: none; }
+.summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
+.summary article, .notice, .problem-card { background: white; border: 1px solid #e7e5e4; border-radius: .65rem; padding: 1.2rem; }
+.summary strong { display: block; color: #0f766e; font-size: 1.55rem; }
+.summary span { color: #6b7280; }
+.notice { margin-top: 2rem; max-width: 760px; }
+.page-heading { margin: 3rem 0 1.5rem; }
+.page-heading h1 { font-size: 2.5rem; }
+.filters { align-items: end; background: white; border: 1px solid #e7e5e4; border-radius: .65rem; display: flex; flex-wrap: wrap; gap: 1rem; padding: 1rem; }
+.filters label { display: grid; gap: .35rem; font-weight: 600; }
+select { background: white; border: 1px solid #a8a29e; border-radius: .3rem; font: inherit; padding: .45rem; }
+.count { color: #6b7280; }
+.problem-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 1rem; }
+.problem-card h2 { font-size: 1.2rem; }
+.problem-card p { color: #6b7280; }
+.number { color: #6b7280; margin-right: .5rem; }
+.badge { background: #ccfbf1; border-radius: 99px; color: #115e59; font-size: .75rem; font-weight: 700; padding: .2rem .45rem; }
+@media (max-width: 640px) { .summary { grid-template-columns: 1fr; } .site-header { align-items: flex-start; flex-direction: column; } }

@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en" xmlns:th="https://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Problem library · LeetCode Thinking Trainer</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+<main class="page">
+    <header class="site-header">
+        <a class="brand" th:href="@{/}">LeetCode Thinking Trainer</a>
+        <nav><a th:href="@{/problems}">Problem library</a><a th:href="@{/status}">Status</a></nav>
+    </header>
+    <section class="page-heading">
+        <p class="eyebrow">Starter catalogue</p>
+        <h1>Problem library</h1>
+        <p>These are metadata and external links only. Future attempt screens will hide categories and patterns until after initial reasoning.</p>
+    </section>
+    <form class="filters" method="get" th:action="@{/problems}">
+        <label>Difficulty
+            <select name="difficulty">
+                <option value="">All difficulties</option>
+                <option th:each="item : ${difficulties}" th:value="${item}" th:text="${item}" th:selected="${item == selectedDifficulty}">EASY</option>
+            </select>
+        </label>
+        <label>Category
+            <select name="category">
+                <option value="">All categories</option>
+                <option th:each="item : ${categories}" th:value="${item}" th:text="${item}" th:selected="${item == selectedCategory}">Stack</option>
+            </select>
+        </label>
+        <button class="button" type="submit">Filter</button>
+        <a th:href="@{/problems}">Clear</a>
+    </form>
+    <p class="count"><span th:text="${#lists.size(problems)}">0</span> active problems</p>
+    <div class="problem-grid">
+        <article class="problem-card" th:each="problem : ${problems}">
+            <div><span class="number" th:text="${problem.leetcodeNumber}">1</span><span class="badge" th:text="${problem.difficulty}">EASY</span></div>
+            <h2 th:text="${problem.title}">Two Sum</h2>
+            <p th:text="${problem.neetcodeCategory}">Arrays &amp; Hashing</p>
+            <a th:href="${problem.externalUrl}" target="_blank" rel="noopener noreferrer">Open external problem ↗</a>
+        </article>
+    </div>
+</main>
+</body>
+</html>

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en" xmlns:th="https://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>LeetCode Thinking Trainer</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body>
+<main class="page">
+    <header class="site-header">
+        <a class="brand" th:href="@{/}">LeetCode Thinking Trainer</a>
+        <nav><a th:href="@{/problems}">Problem library</a><a th:href="@{/status}">Status</a></nav>
+    </header>
+    <section class="hero">
+        <p class="eyebrow">Phase 1 · Catalogue foundation</p>
+        <h1>Practice the reasoning between a prompt and an algorithm.</h1>
+        <p>This is not a solved-problem tracker. It will record the cognitive steps that lead from a relationship and brute force to state, operations, invariants, implementation, and transfer.</p>
+        <a class="button" th:href="@{/problems}">Browse the starter catalogue</a>
+    </section>
+    <section class="summary" aria-label="Catalogue status">
+        <article><strong th:text="${problemCount}">0</strong><span>metadata-only starter problems</span></article>
+        <article><strong th:text="${patternCount}">0</strong><span>initial reasoning patterns</span></article>
+        <article><strong>Local</strong><span>H2 persistence; no account or external service</span></article>
+    </section>
+    <section class="notice">
+        <h2>What comes next</h2>
+        <p>Attempts, assessment, hints, and review scheduling are intentionally not implemented in this phase. The catalogue is a foundation for those stage-level learning workflows, not a completion checklist.</p>
+    </section>
+</main>
+</body>
+</html>
