@@ -32,6 +32,15 @@ public class StageAssessment {
     protected StageAssessment() { }
     public StageAssessment(UUID id, UUID attemptId, StageType stageType, Instant now) { this.id = id; this.attemptId = attemptId; this.stageType = stageType; this.createdAt = now; this.updatedAt = now; }
     public void markStarted(Instant now) { if (startedAt == null) { startedAt = now; updatedAt = now; } }
+    /** Records an unvisited stage as an explicit 0 without inventing an answer or evidence. */
+    public void markSkipped(Instant now) {
+        if (score != null) return;
+        score = AssessmentScore.NOT_ABLE.getValue();
+        if (startedAt == null) startedAt = now;
+        completedAt = now;
+        durationSeconds = Math.max(0, Duration.between(startedAt, now).getSeconds());
+        updatedAt = now;
+    }
     public void save(StageSaveCommand command, Instant now) {
         answer = command.answer(); timeComplexity = command.timeComplexity(); spaceComplexity = command.spaceComplexity(); trace = command.trace();
         updatedRegion = command.updatedRegion(); dataStructure = command.dataStructure(); selectionReason = command.selectionReason();
@@ -57,6 +66,7 @@ public class StageAssessment {
     private boolean isBlank(String value) { return value == null || value.isBlank(); }
     public UUID getId() { return id; } public UUID getAttemptId() { return attemptId; } public StageType getStageType() { return stageType; }
     public String getAnswer() { return answer; } public Integer getScore() { return score; } public Long getDurationSeconds() { return durationSeconds; }
+    public Instant getStartedAt() { return startedAt; } public Instant getCompletedAt() { return completedAt; }
     public String getTimeComplexity() { return timeComplexity; } public String getSpaceComplexity() { return spaceComplexity; } public String getTrace() { return trace; }
     public UpdatedRegion getUpdatedRegion() { return updatedRegion; } public DataStructureOption getDataStructure() { return dataStructure; }
     public String getSelectionReason() { return selectionReason; } public Set<RequiredOperation> getRequiredOperations() { return Set.copyOf(requiredOperations); }

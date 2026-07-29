@@ -25,7 +25,7 @@ class HomeAndStatusControllerTest {
     void rendersHomePage() throws Exception {
         mockMvc.perform(get("/"))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString("Practice the reasoning")));
+                .andExpect(content().string(containsString("考え方を導く工程を育てる")));
     }
 
     @Test

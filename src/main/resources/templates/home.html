@@ -10,23 +10,27 @@
 <main class="page">
     <header class="site-header">
         <a class="brand" th:href="@{/}">LeetCode Thinking Trainer</a>
-        <nav><a th:href="@{/problems}">問題一覧</a><a th:href="@{/patterns}">パターン一覧</a><a th:href="@{/status}">状態</a></nav>
+        <nav><a th:href="@{/problems}">問題一覧</a><a th:href="@{/patterns}">パターン一覧</a><a th:href="@{/reviews}">復習</a><a th:href="@{/analytics}">分析</a><a th:href="@{/status}">状態</a></nav>
     </header>
     <section class="hero">
-        <p class="eyebrow">Phase 1 · Catalogue foundation</p>
-        <h1>Practice the reasoning between a prompt and an algorithm.</h1>
-        <p>This is not a solved-problem tracker. It will record the cognitive steps that lead from a relationship and brute force to state, operations, invariants, implementation, and transfer.</p>
-        <a class="button" th:href="@{/problems}">Browse the starter catalogue</a>
+        <p class="eyebrow">認知工程ダッシュボード</p>
+        <h1>解いた数ではなく、考え方を導く工程を育てる。</h1>
+        <p>自力で進められた工程、必要だったヒント、同じ問題での再構築、見た目の異なる問題への転用を分けて振り返ります。</p>
+        <a class="button" th:href="@{/analytics}">工程別の分析を見る</a>
     </section>
-    <section class="summary" aria-label="Catalogue status">
-        <article><strong th:text="${problemCount}">0</strong><span>metadata-only starter problems</span></article>
-        <article><strong th:text="${patternCount}">0</strong><span>initial reasoning patterns</span></article>
-        <article><strong>Local</strong><span>H2 persistence; no account or external service</span></article>
+    <section class="summary" aria-label="現在の能力">
+        <article><strong th:text="${analytics.metric(T(com.example.leetcodetrainer.attempt.domain.StageType).PROBLEM_RELATION).success.independentDisplay}">N/A</strong><span>問題の関係を自力で捉えられた割合</span></article>
+        <article><strong th:text="${analytics.transfer.independentDisplay}">N/A</strong><span>同型未見問題への自力転用</span></article>
+        <article><strong th:text="${analytics.retention.independentDisplay}">N/A</strong><span>同じ問題の自力保持</span></article>
     </section>
+    <section class="notice"><h2>今日の復習</h2><p><strong th:text="${dueReviewCount}">0</strong> 件が本日、<strong th:text="${overdueReviewCount}">0</strong> 件が期限超過です。</p><p th:if="${nextReview != null}">次の復習: <a th:href="@{/reviews/{id}(id=${nextReview.schedule.id})}" th:text="${nextReview.schedule.reviewType.displayName + ' · ' + nextReview.sourceProblem.title}">復習</a></p><a class="button" th:href="@{/reviews}">復習キューを開く</a></section>
     <section class="notice">
-        <h2>What comes next</h2>
-        <p>Attempts, assessment, hints, and review scheduling are intentionally not implemented in this phase. The catalogue is a foundation for those stage-level learning workflows, not a completion checklist.</p>
+        <h2>今週の重点工程</h2>
+        <p th:if="${activeWeeklyPlan != null}"><strong th:text="${activeWeeklyPlan.focusStage.displayName}">工程</strong>に取り組みます。<span th:text="${activeWeeklyPlan.reason}">理由</span></p>
+        <p th:unless="${activeWeeklyPlan != null}" th:text="${focusRecommendation.reason}">推奨理由</p>
+        <form method="post" th:action="@{/weekly-plans}" class="inline-form"><label>重点工程 <select name="stage" th:value="${focusRecommendation.stage}"><option th:each="stage : ${stageTypes}" th:value="${stage}" th:text="${stage.displayName}" th:selected="${stage == focusRecommendation.stage}">工程</option></select></label><label>自分用の理由（任意）<input name="reason"></label><button type="submit">この重点を採用する</button></form>
     </section>
+    <section class="notice"><h2>注意</h2><p>表示する率には必ず観測数があります。N/A は失敗率 0% ではなく、まだ判断できる記録がないことを意味します。</p></section>
 </main>
 </body>
 </html>

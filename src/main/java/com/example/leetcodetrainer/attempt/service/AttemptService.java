@@ -3,12 +3,15 @@ package com.example.leetcodetrainer.attempt.service;
 import com.example.leetcodetrainer.attempt.domain.*;
 import com.example.leetcodetrainer.attempt.repository.AttemptRepository;
 import com.example.leetcodetrainer.attempt.repository.StageAssessmentRepository;
+import com.example.leetcodetrainer.hint.service.HintService;
 import com.example.leetcodetrainer.shared.domain.ResourceNotFoundException;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,13 +21,24 @@ public class AttemptService {
     private final AttemptRepository attemptRepository;
     private final StageAssessmentRepository stageAssessmentRepository;
     private final Clock clock;
+    private final HintService hintService;
+    private final ApplicationEventPublisher eventPublisher;
 
-    public AttemptService(AttemptRepository attemptRepository, StageAssessmentRepository stageAssessmentRepository, Clock clock) {
-        this.attemptRepository = attemptRepository; this.stageAssessmentRepository = stageAssessmentRepository; this.clock = clock;
+    public AttemptService(AttemptRepository attemptRepository, StageAssessmentRepository stageAssessmentRepository, Clock clock,
+                          HintService hintService) {
+        this(attemptRepository, stageAssessmentRepository, clock, hintService, null);
+    }
+    @Autowired
+    public AttemptService(AttemptRepository attemptRepository, StageAssessmentRepository stageAssessmentRepository, Clock clock,
+                          HintService hintService, ApplicationEventPublisher eventPublisher) {
+        this.attemptRepository = attemptRepository; this.stageAssessmentRepository = stageAssessmentRepository; this.clock = clock; this.hintService = hintService; this.eventPublisher = eventPublisher;
     }
     public Attempt start(UUID problemId, AttemptType type) {
+        return start(problemId, type, null);
+    }
+    public Attempt start(UUID problemId, AttemptType type, UUID sourceReviewScheduleId) {
         Instant now = Instant.now(clock);
-        Attempt attempt = attemptRepository.save(new Attempt(UUID.randomUUID(), problemId, type, now));
+        Attempt attempt = attemptRepository.save(new Attempt(UUID.randomUUID(), problemId, type, sourceReviewScheduleId, now));
         stageAssessmentRepository.saveAll(StageType.ordered().stream()
                 .map(stage -> new StageAssessment(UUID.randomUUID(), attempt.getId(), stage, now)).toList());
         return attempt;
@@ -50,6 +64,7 @@ public class AttemptService {
     }
     public void saveStage(UUID attemptId, StageType stageType, StageSaveCommand command) {
         Attempt attempt = get(attemptId); requireInProgress(attempt);
+        hintService.validateScore(attemptId, stageType, command.score());
         StageAssessment assessment = stage(attemptId, stageType, true);
         assessment.save(command, Instant.now(clock));
     }
@@ -69,9 +84,11 @@ public class AttemptService {
     }
     public void complete(UUID attemptId, FinalResult result) {
         Attempt attempt = get(attemptId); requireInProgress(attempt);
-        if (stages(attemptId).stream().anyMatch(stage -> stage.getScore() == null))
-            throw new IllegalStateException("13工程すべてに0〜2点の評価を付けてから完了してください。");
-        attempt.complete(result, Instant.now(clock));
+        Instant now = Instant.now(clock);
+        stages(attemptId).forEach(stage -> stage.markSkipped(now));
+        attempt.complete(result, now);
+        if (eventPublisher != null) eventPublisher.publishEvent(new AttemptCompletedEvent(attempt.getId(), attempt.getProblemId(),
+                attempt.getAttemptType(), attempt.getSourceReviewScheduleId(), attempt.getCompletedAt()));
     }
     public void abandon(UUID attemptId) { get(attemptId).abandon(Instant.now(clock)); }
     private void requireInProgress(Attempt attempt) {

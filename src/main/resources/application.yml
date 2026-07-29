@@ -18,3 +18,7 @@ spring:
 server:
   error:
     include-message: always
+
+app:
+  review:
+    time-zone: Europe/London

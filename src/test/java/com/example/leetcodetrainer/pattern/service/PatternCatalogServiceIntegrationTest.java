@@ -34,6 +34,19 @@ class PatternCatalogServiceIntegrationTest {
     }
 
     @Test
+    void generalizedStateLanguageFitsStackSearchAndWindowPatterns() {
+        var monotonic = patternRepository.findByCode("MONOTONIC_STACK").orElseThrow();
+        var binarySearch = patternRepository.findByCode("BINARY_SEARCH").orElseThrow();
+        var runningMinimum = patternRepository.findByCode("SINGLE_PASS_MINIMUM_TRACKING").orElseThrow();
+        assertThat(monotonic.getUnresolvedState()).contains("waiting");
+        assertThat(monotonic.getUpdatedRegion()).contains("suffix");
+        assertThat(binarySearch.getUnresolvedState()).contains("search interval");
+        assertThat(binarySearch.getUpdatedRegion()).contains("half");
+        assertThat(runningMinimum.getUnresolvedState()).contains("lowest buy price");
+        assertThat(runningMinimum.getUpdatedRegion()).contains("running minimum");
+    }
+
+    @Test
     void primaryPatternCanBeChangedAndDuplicateAssociationIsRejected() {
         var problem = problemRepository.findAll().stream().filter(item -> item.getSlug().equals("two-sum")).findFirst().orElseThrow();
         var binarySearch = patternRepository.findByCode("BINARY_SEARCH").orElseThrow();

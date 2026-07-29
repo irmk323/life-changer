@@ -204,4 +204,7 @@ coaching messages. Imports validate schema version, controlled enums, score and
 hint bounds, references, and UUID collisions before a transaction. The initial
 MVP supports a separate CSV/JSON problem seed schema; it does not scrape any
 site or import copyrighted statement/editorial text.
+# Phase 8 patch compatibility
+
+`StageAssessment.stageType` は保存済みの `UNRESOLVED_STATE` と `UPDATED_REGION` を維持する。画面と教材ではそれぞれ「保持する状態・未確定の候補」「状態の参照・更新対象」と表示する。`UpdatedRegion` は既存値を変更せず、`SEARCH_RANGE` と `NOT_APPLICABLE` を追加するため、過去の assessment と analytics key の変換は不要である。
 

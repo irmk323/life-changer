@@ -21,11 +21,27 @@
 | Keep `ProblemPattern`'s composite key | The existing architecture and migration use `(problem_id, pattern_id)` as the natural unique identity. The entity remains explicit and stores association metadata, avoiding an unnecessary key migration while supporting many-to-many extension. |
 | Evolve the seeded catalogue through a new Flyway migration | Existing local databases may already be at V2. V3 adds the richer pattern fields, typed category values, constraints, and corrected Binary Search seed without rewriting migration history. |
 | Generate all 13 `StageAssessment` drafts when an Attempt starts | A fixed set makes missing cognitive evidence visible, supports resumable drafts, and prevents a solved-problem outcome from standing in for unrecorded reasoning. |
-| Require an explicit 0–2 score for every stage before completion | An empty answer may be completed as score 0, but cannot be silently skipped. This records inability as learning evidence while preserving the 13-stage model. |
+| Record unvisited stages as 0 when an Attempt is completed | A learner may end an exercise before visiting every stage. Completion converts only unscored stages to an explicit 0, while preserving all recorded answers and scores. This avoids blocking the learner and keeps missing cognitive evidence visible for review. |
+| Keep `UNRESOLVED_STATE` and `UPDATED_REGION` as internal keys while generalising their learner-facing definitions | Existing Attempt rows, hint usage, failure labels, weekly plans, and analytics are keyed by these enum values. The UI calls them 「保持する状態・未確定の候補」 and 「状態の参照・更新対象」, which works for key lookup, stack, search-range, window, and tree problems without a destructive migration. |
 | Allow edits while an Attempt is in progress; make completed Attempts immutable | Learners can correct drafts during a session, but completed evidence and duration remain stable for later analytics and review scheduling. |
 | Store required operations in a normalized collection table | Operation selections stay queryable for future bottleneck and data-structure analysis, unlike a serialized text field. |
 | Persist explicit pattern reveal per Attempt | The workspace hides pattern tags by default. A learner can consciously reveal them; the timestamp remains an extension point for Phase 4 hint-usage validation without implementing hints now. |
 | Treat score 1 as self-reported assistance in Phase 3 | Hints are not implemented yet. The score retains its meaning and can later be checked against `HintUsage` rather than being blocked until Phase 4. |
+| Reveal hints by the next configured level only | A learner cannot request a later available level directly. All hints at that level are recorded on first reveal, so a staged prompt remains a scaffold rather than a shortcut to an answer. |
+| Prefer problem-specific hints over pattern hints at the same stage and level | Problem wording can target the learner's current representation. Pattern hints fill only missing levels and are written without the pattern name, preserving tag-hidden practice. |
+| Treat HintUsage as immutable reveal evidence, with one outcome update | `unique(attempt_id, hint_id)` records only the first reveal. `helpedUserProceed` and a learner note can be added later, including after completion, because the outcome may be known only when the learner tries the next step. |
+| Derive maximum hint level from HintUsage | No `max_hint_level` column is stored on StageAssessment, avoiding two sources of truth. Score validation queries the recorded usage evidence. |
+| Reject score 2 after any hint was revealed for that stage | The application does not silently downgrade self-assessment. It explains the conflict and requires the learner to select score 0 or 1; level 5 may still be scored 1 when the learner can explain the approach. |
+| Derive DUE and MISSED from `scheduledDate` and an injected Europe/London clock | The persistent schedule only records stable workflow states (`PENDING`, `RESCHEDULED`, `COMPLETED`, `CANCELLED`). This avoids stale date-state writes while keeping review dates testable at time-zone boundaries. |
+| Create the four review types through an Attempt-completed domain event | `AttemptService` remains responsible for completing an attempt; the review feature reacts only to `INITIAL` completions and links review completions without a service dependency cycle. The database unique key makes generation idempotent. |
+| Use a nullable assignment with manual fallback for isomorphic transfer | The initial seed does not guarantee a second active problem for every primary pattern. The review preserves its transfer purpose through an explicit task note and requires a user assignment instead of silently turning it into same-problem repetition. |
+| Keep remedial review user-triggered in Phase 5 | A completed review can create one next-day follow-up with a stored reason. It is sourced from that completion attempt, so it does not duplicate the original schedule; automatic adaptive re-scheduling remains Phase 6 work. |
+| Make the review-attempt link nullable on review deletion | `attempts.source_review_schedule_id` uses `ON DELETE SET NULL`, preventing a foreign-key cycle with a review's source/completion attempt while retaining referential integrity for normal operation. |
+| Keep one AttemptFailureLabel record per attempt/label | A system suggestion is stored as unconfirmed; confirmation updates that same record to `SYSTEM_CONFIRMED`, and a rejection removes it. This prevents the application from retaining a rejected label as a claim about the learner. |
+| Use explicit, bounded bottleneck heuristics | Score 0/1, hint level, upstream stage order, implementation flags, review type, and confirmed prior frequency determine suggestions. The UI calls this an app heuristic and presents evidence; it never makes ability, medical, or personality claims. |
+| Require a confirmed HIGH label before creating a targeted review | Phase 6 supplies a one-day, label-linked `TARGETED_BOTTLENECK` review only by user action. It deduplicates by source Attempt, review type, and failure label; adaptive automatic scheduling remains out of scope. |
+| Persist coaching messages as append-only provider versions | Each generation stores provider name, rule version, structured fields, and rendered text. Regeneration does not rewrite past analysis, so a rule change remains auditable. |
+| Use a local keyword safety-note extension point | The rule-based coach can show a non-diagnostic safety note for a small set of explicit self-harm phrases. It neither assesses risk nor supplies country-specific contacts; false negatives and positives remain a documented limitation. |
 
 ## Algorithms and policy
 
@@ -145,3 +161,11 @@ diagnose motivation, aptitude, or mental health.
   exemplar; no external prompt or solution text is copied.
 - The configured schedule can be changed for future schedules, but existing
   scheduled reviews remain historical commitments unless explicitly rescheduled.
+# Phase 8: 認知工程中心の分析
+
+- 分析の率は `Metric` に分子と分母を保持し、分母が 0 の場合は `N/A` と表示する。未観測を失敗率 0% と解釈しないためである。
+- 期間は注入された `Clock` と `app.review.time-zone` を使い、開始日は利用者のローカル日付の午前 0 時を含む。
+- retention は再構築 Attempt、transfer は `ISOMORPHIC_TRANSFER` Attempt を別々に集計する。現行データには stage applicability がないため、transfer は定義済み core stage がすべて評価済みの Attempt のみを分母とする。
+- 比較／混合分類にはまだ expected answer を構造化した item がない。Phase 8 では `TRANSFER` 工程に判断理由があり score が記録された Attempt を暫定の観測単位とし、expected-answer 型の分類モデルは将来の明示的な Phase で追加する。
+- pattern candidate と working solution の時間は、現行の stage `durationSeconds`（工程開始から完了まで）を中央値にする。Attempt 開始からの累積時刻は既存の stage timestamp だけでは復元できないため、表示を工程時間として解釈する。
+- WeeklyPlan は単一ローカルユーザーの active plan を一つにし、新しい採用時には前の active plan をキャンセルする。推奨は過去28日の自力成功率が最も低い観測済み工程を使い、データがない場合は問題の関係工程を提案する。

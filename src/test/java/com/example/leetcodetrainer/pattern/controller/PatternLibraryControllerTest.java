@@ -24,7 +24,8 @@ class PatternLibraryControllerTest {
         mockMvc.perform(get("/patterns")).andExpect(status().isOk()).andExpect(view().name("patterns/library"))
                 .andExpect(content().string(containsString("Monotonic stack")));
         mockMvc.perform(get("/patterns/10000000-0000-0000-0000-000000000002")).andExpect(status().isOk())
-                .andExpect(view().name("patterns/detail")).andExpect(content().string(containsString("Unresolved state")))
+                .andExpect(view().name("patterns/detail")).andExpect(content().string(containsString("保持する状態・未確定の候補")))
+                .andExpect(content().string(containsString("状態の参照・更新対象")))
                 .andExpect(content().string(containsString("Daily Temperatures")));
     }
 }

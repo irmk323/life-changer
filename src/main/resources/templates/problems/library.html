@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Problem library · LeetCode Thinking Trainer</title>
+    <title>問題一覧 · LeetCode Thinking Trainer</title>
     <link rel="stylesheet" th:href="@{/css/app.css}">
 </head>
 <body>
@@ -15,7 +15,7 @@
     <section class="page-heading">
         <p class="eyebrow">学習カタログ</p>
         <h1>問題一覧</h1>
-        <p>問題本文や公式解答は保存していません。演習開始時には、後続Phaseでカテゴリとパターンを隠します。</p>
+        <p>問題文や公式解答は保存していません。演習では、問題名から解法を思い出すのではなく、自分の思考の道筋を記録します。</p>
     </section>
     <form class="filters" method="get" th:action="@{/problems}">
         <label>難易度
@@ -33,13 +33,13 @@
         <button class="button" type="submit">絞り込む</button>
         <a th:href="@{/problems}">解除</a>
     </form>
-    <p class="count"><span th:text="${#lists.size(problems)}">0</span> 件の有効な問題</p>
+    <p class="count">演習できる問題: <span th:text="${#lists.size(problems)}">0</span> 件</p>
     <div class="problem-grid">
         <article class="problem-card" th:each="problem : ${problems}">
             <div><span class="number" th:text="${problem.leetcodeNumber}">1</span><span class="badge" th:text="${problem.difficulty}">EASY</span></div>
             <h2 th:text="${problem.title}">Two Sum</h2>
             <p th:text="${problem.neetcodeCategory.displayName}">Arrays &amp; Hashing</p>
-            <p>主要パターン: <span th:text="${primaryPatternNames.get(problem.id) != null ? primaryPatternNames.get(problem.id) : '未設定'}">Hash Lookup</span></p>
+            <p>中心となる思考パターン: <span th:text="${primaryPatternNames.get(problem.id) != null ? primaryPatternNames.get(problem.id) : '未設定'}">Hash Lookup</span></p>
             <p th:text="${problem.active ? '状態: 有効' : '状態: 無効'}">状態: 有効</p>
             <a th:href="@{/problems/{id}(id=${problem.id})}">詳細を見る</a>
         </article>

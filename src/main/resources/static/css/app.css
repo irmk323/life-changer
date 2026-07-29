@@ -31,8 +31,11 @@ button:not(.button) { border: 1px solid #78716c; border-radius: .35rem; backgrou
 .workspace-card label, .supplemental-form label { display: grid; gap: .35rem; font-weight: 600; margin: .8rem 0; }
 .field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; } .field-grid .wide { grid-column: 1 / -1; }
 fieldset { border: 1px solid #d6d3d1; border-radius: .4rem; margin: 1rem 0; padding: .7rem; } .check { align-items: center; display: inline-flex !important; font-weight: 400 !important; gap: .35rem; margin: .3rem .7rem .3rem 0 !important; } .check input { width: auto; }
+.implementation-checks { display: grid; gap: .3rem; margin: .8rem 0; } .implementation-checks .check { margin: 0 !important; }
 .save-row, .nav-row { align-items: end; display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 1rem; } .save-row label { flex: 1; margin: 0; }.nav-row { justify-content: space-between; }
 .supplemental-form { border-top: 1px solid #e7e5e4; margin-top: 1.5rem; padding-top: 1rem; }.flash { border-radius: .4rem; padding: .8rem 1rem; }.flash.error { background: #fee2e2; color: #991b1b; }.flash.message { background: #ccfbf1; color: #115e59; }.compact { margin-top: 1rem; }.inline-form { margin-top: 1rem; }.result-list li { margin: 1rem 0; }.result-list p { white-space: pre-line; }
+.hint-panel { background: #f0fdfa; border: 1px solid #99f6e4; border-radius: .55rem; margin-top: 1.5rem; padding: 1rem; }.hint-panel > p { color: #4b5563; line-height: 1.5; }.hint-list { padding-left: 1.3rem; }.hint-list li { margin: 1rem 0; }.hint-list p { white-space: pre-line; }.hint-list form { border-top: 1px solid #ccfbf1; margin-top: .5rem; padding-top: .5rem; }.hint-list label { margin-right: .7rem; }.hint-list input[type="radio"] { width: auto; }.level-five { background: #fef3c7; border-radius: 99px; color: #92400e; font-size: .75rem; font-weight: 700; margin-left: .4rem; padding: .18rem .4rem; }
+.primary-question { color: #0f766e; font-size: 1.1rem; font-weight: 700; line-height: 1.55; }.helper-questions { color: #4b5563; line-height: 1.5; padding-left: 1.3rem; }.helper-copy { color: #4b5563; line-height: 1.5; }
 @media (max-width: 800px) { .workspace-layout { grid-template-columns: 1fr; } .field-grid { grid-template-columns: 1fr; } }
 .count { color: #6b7280; }
 .problem-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 1rem; }
@@ -43,4 +46,5 @@ fieldset { border: 1px solid #d6d3d1; border-radius: .4rem; margin: 1rem 0; padd
 .problem-card p { color: #6b7280; }
 .number { color: #6b7280; margin-right: .5rem; }
 .badge { background: #ccfbf1; border-radius: 99px; color: #115e59; font-size: .75rem; font-weight: 700; padding: .2rem .45rem; }
+table { border-collapse: collapse; width: 100%; } th, td { border-bottom: 1px solid #e7e5e4; padding: .6rem; text-align: left; } th { color: #57534e; }
 @media (max-width: 640px) { .summary { grid-template-columns: 1fr; } .site-header { align-items: flex-start; flex-direction: column; } }

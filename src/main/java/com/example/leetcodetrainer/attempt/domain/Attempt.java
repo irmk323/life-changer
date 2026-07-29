@@ -10,6 +10,7 @@ import java.util.UUID;
 public class Attempt {
     @Id private UUID id;
     @Column(name = "problem_id", nullable = false) private UUID problemId;
+    @Column(name = "source_review_schedule_id") private UUID sourceReviewScheduleId;
     @Enumerated(EnumType.STRING) @Column(nullable = false) private AttemptType attemptType;
     @Enumerated(EnumType.STRING) @Column(nullable = false) private AttemptStatus status;
     @Column(nullable = false) private Instant startedAt;
@@ -38,7 +39,11 @@ public class Attempt {
 
     protected Attempt() { }
     public Attempt(UUID id, UUID problemId, AttemptType attemptType, Instant now) {
+        this(id, problemId, attemptType, null, now);
+    }
+    public Attempt(UUID id, UUID problemId, AttemptType attemptType, UUID sourceReviewScheduleId, Instant now) {
         this.id = id; this.problemId = problemId; this.attemptType = attemptType; this.status = AttemptStatus.IN_PROGRESS;
+        this.sourceReviewScheduleId = sourceReviewScheduleId;
         this.startedAt = now; this.currentStageOrder = 1; this.language = "Java"; this.createdAt = now; this.updatedAt = now;
     }
     public void moveTo(StageType stage, Instant now) { requireEditable(); currentStageOrder = stage.getOrder(); updatedAt = now; }
@@ -65,7 +70,7 @@ public class Attempt {
     }
     private int nonNegative(Integer value, String label) { if (value == null) return 0; if (value < 0) throw new IllegalArgumentException(label + " count cannot be negative."); return value; }
     private void requireEditable() { if (status != AttemptStatus.IN_PROGRESS) throw new IllegalStateException("完了または中断した演習は編集できません。"); }
-    public UUID getId() { return id; } public UUID getProblemId() { return problemId; } public AttemptType getAttemptType() { return attemptType; }
+    public UUID getId() { return id; } public UUID getProblemId() { return problemId; } public UUID getSourceReviewScheduleId() { return sourceReviewScheduleId; } public AttemptType getAttemptType() { return attemptType; }
     public AttemptStatus getStatus() { return status; } public Instant getStartedAt() { return startedAt; } public Instant getCompletedAt() { return completedAt; }
     public Long getDurationSeconds() { return durationSeconds; } public int getCurrentStageOrder() { return currentStageOrder; } public String getLanguage() { return language; }
     public FinalResult getFinalResult() { return finalResult; } public String getExternalSubmissionResult() { return externalSubmissionResult; } public String getCode() { return code; }
