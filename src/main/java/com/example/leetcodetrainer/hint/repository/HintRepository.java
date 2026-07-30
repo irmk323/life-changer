@@ -10,4 +10,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface HintRepository extends JpaRepository<Hint, UUID> {
     List<Hint> findByProblemIdAndStageTypeAndActiveTrueOrderByHintLevelAscDisplayOrderAsc(UUID problemId, StageType stageType);
     List<Hint> findByPatternIdInAndStageTypeAndActiveTrueOrderByHintLevelAscDisplayOrderAsc(Collection<UUID> patternIds, StageType stageType);
+    List<Hint> findByProblemIdIsNullAndPatternIdIsNullAndStageTypeAndActiveTrueOrderByHintLevelAscDisplayOrderAsc(StageType stageType);
+    java.util.Optional<Hint> findByProblemIdIsNullAndPatternIdIsNullAndStageTypeAndHintLevel(StageType stageType, int hintLevel);
 }

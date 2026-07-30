@@ -8,5 +8,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface AttemptRepository extends JpaRepository<Attempt, UUID> {
     List<Attempt> findByProblemIdOrderByStartedAtDesc(UUID problemId);
+    java.util.Optional<Attempt> findFirstByProblemIdAndStatusOrderByStartedAtDesc(UUID problemId, AttemptStatus status);
     List<Attempt> findByStatusOrderByCompletedAtDesc(AttemptStatus status);
+    java.util.Optional<Attempt> findFirstByStatusOrderByStartedAtDesc(AttemptStatus status);
 }

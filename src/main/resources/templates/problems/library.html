@@ -34,16 +34,15 @@
         <a th:href="@{/problems}">解除</a>
     </form>
     <p class="count">演習できる問題: <span th:text="${#lists.size(problems)}">0</span> 件</p>
-    <div class="problem-grid">
-        <article class="problem-card" th:each="problem : ${problems}">
-            <div><span class="number" th:text="${problem.leetcodeNumber}">1</span><span class="badge" th:text="${problem.difficulty}">EASY</span></div>
-            <h2 th:text="${problem.title}">Two Sum</h2>
-            <p th:text="${problem.neetcodeCategory.displayName}">Arrays &amp; Hashing</p>
-            <p>中心となる思考パターン: <span th:text="${primaryPatternNames.get(problem.id) != null ? primaryPatternNames.get(problem.id) : '未設定'}">Hash Lookup</span></p>
-            <p th:text="${problem.active ? '状態: 有効' : '状態: 無効'}">状態: 有効</p>
-            <a th:href="@{/problems/{id}(id=${problem.id})}">詳細を見る</a>
-        </article>
-    </div>
+    <div class="table-wrap"><table class="problem-table"><thead><tr><th scope="col">番号</th><th scope="col">問題</th><th scope="col">難易度</th><th scope="col">カテゴリ</th><th scope="col"><span class="sr-only">操作</span></th></tr></thead><tbody>
+        <tr th:each="problem : ${problems}" th:classappend="${problem.solved ? ' solved' : ''}">
+            <td th:text="${problem.leetcodeNumber}">1</td>
+            <td th:text="${problem.title}">Two Sum</td>
+            <td><span class="badge" th:classappend="${' difficulty-' + #strings.toLowerCase(problem.difficulty.name())}" th:text="${problem.difficulty}">EASY</span></td>
+            <td th:text="${problem.neetcodeCategory.displayName}">Arrays &amp; Hashing</td>
+            <td class="problem-actions"><form th:action="@{/problems/{id}/attempts(id=${problem.id})}" method="post"><button type="submit">演習を開く</button></form><form th:action="@{/problems/{id}/toggle-solved(id=${problem.id})}" method="post"><button type="submit" th:aria-label="${problem.solved ? '解決済みを取り消す' : '解決済みにする'}">解いた</button></form></td>
+        </tr>
+    </tbody></table></div>
 </main>
 </body>
 </html>

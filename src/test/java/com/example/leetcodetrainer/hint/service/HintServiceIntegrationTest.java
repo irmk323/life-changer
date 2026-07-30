@@ -12,6 +12,7 @@ import com.example.leetcodetrainer.hint.repository.HintRepository;
 import com.example.leetcodetrainer.hint.repository.HintUsageRepository;
 import com.example.leetcodetrainer.pattern.repository.PatternRepository;
 import com.example.leetcodetrainer.problem.repository.ProblemRepository;
+import com.example.leetcodetrainer.referenceanswer.repository.StageReferenceAnswerRevealRepository;
 import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
@@ -34,9 +35,10 @@ class HintServiceIntegrationTest {
     @Autowired private HintUsageRepository hintUsageRepository;
     @Autowired private ProblemRepository problemRepository;
     @Autowired private PatternRepository patternRepository;
+    @Autowired private StageReferenceAnswerRevealRepository referenceAnswerRevealRepository;
 
     @BeforeEach
-    void cleanAttempts() { stageAssessmentRepository.deleteAll(); attemptRepository.deleteAll(); }
+    void cleanAttempts() { referenceAnswerRevealRepository.deleteAll(); stageAssessmentRepository.deleteAll(); attemptRepository.deleteAll(); }
 
     @Test
     void revealsOnlyTheNextAvailableLevelAndDoesNotCreateDuplicateUsage() {
@@ -59,7 +61,10 @@ class HintServiceIntegrationTest {
     void problemHintWinsAtTheSameLevelAndPatternHintFillsAMissingLevel() {
         Attempt daily = attemptService.start(dailyTemperaturesId(), AttemptType.INITIAL);
         hintService.revealNext(daily.getId(), StageType.REQUIRED_OPERATIONS);
+        hintService.revealNext(daily.getId(), StageType.REQUIRED_OPERATIONS);
         assertThat(hintService.progress(daily.getId(), StageType.REQUIRED_OPERATIONS).revealedUsages().getFirst().getHint().getContent())
+                .contains("データ構造名の前に");
+        assertThat(hintService.progress(daily.getId(), StageType.REQUIRED_OPERATIONS).revealedUsages().getLast().getHint().getContent())
                 .contains("最後を見る");
 
         var twoSum = problemRepository.findAll().stream().filter(problem -> problem.getSlug().equals("two-sum")).findFirst().orElseThrow();
@@ -110,6 +115,15 @@ class HintServiceIntegrationTest {
         assertThat(problemRepository.findByActiveTrueOrderByLeetcodeNumberAsc())
                 .allSatisfy(problem -> assertThat(hintRepository.findAll().stream()
                         .anyMatch(hint -> problem.getId().equals(hint.getProblemId()))).isTrue());
+    }
+
+    @Test
+    void importsOneSourceOfTruthHintForEveryCognitiveStage() {
+        for (StageType stage : StageType.ordered()) {
+            assertThat(hintRepository.findByProblemIdIsNullAndPatternIdIsNullAndStageTypeAndActiveTrueOrderByHintLevelAscDisplayOrderAsc(stage))
+                    .hasSize(1)
+                    .allSatisfy(hint -> assertThat(hint.getContent()).isNotBlank());
+        }
     }
 
     @Test

@@ -8,6 +8,7 @@ import com.example.leetcodetrainer.failure.repository.AttemptFailureLabelReposit
 import com.example.leetcodetrainer.hint.repository.HintUsageRepository;
 import com.example.leetcodetrainer.review.domain.ReviewSchedule;
 import com.example.leetcodetrainer.review.repository.ReviewScheduleRepository;
+import com.example.leetcodetrainer.referenceanswer.repository.StageReferenceAnswerRevealRepository;
 import java.time.*;
 import java.util.*;
 import java.util.function.Predicate;
@@ -22,12 +23,12 @@ public class AnalyticsService {
             StageType.DATA_STRUCTURE_SELECTION, StageType.INVARIANT);
     private static final List<StageType> TRANSFER_CORE = List.of(StageType.PROBLEM_RELATION, StageType.UPDATED_REGION,
             StageType.REQUIRED_OPERATIONS, StageType.DATA_STRUCTURE_SELECTION, StageType.INVARIANT);
-    private final AttemptRepository attempts; private final StageAssessmentRepository assessments; private final HintUsageRepository hints;
+    private final AttemptRepository attempts; private final StageAssessmentRepository assessments; private final HintUsageRepository hints; private final StageReferenceAnswerRevealRepository referenceReveals;
     private final AttemptFailureLabelRepository failures; private final ReviewScheduleRepository reviews; private final Clock clock; private final ZoneId zoneId;
 
-    public AnalyticsService(AttemptRepository attempts, StageAssessmentRepository assessments, HintUsageRepository hints,
+    public AnalyticsService(AttemptRepository attempts, StageAssessmentRepository assessments, HintUsageRepository hints, StageReferenceAnswerRevealRepository referenceReveals,
                             AttemptFailureLabelRepository failures, ReviewScheduleRepository reviews, Clock clock, ZoneId reviewZoneId) {
-        this.attempts = attempts; this.assessments = assessments; this.hints = hints; this.failures = failures; this.reviews = reviews; this.clock = clock; this.zoneId = reviewZoneId;
+        this.attempts = attempts; this.assessments = assessments; this.hints = hints; this.referenceReveals=referenceReveals; this.failures = failures; this.reviews = reviews; this.clock = clock; this.zoneId = reviewZoneId;
     }
 
     public AnalyticsSnapshot snapshot(AnalyticsPeriod period) {
@@ -66,7 +67,11 @@ public class AnalyticsService {
     }
     private Map<StageKey, Integer> maxHints(Set<UUID> ids) {
         if (ids.isEmpty()) return Map.of();
-        return hints.findMaxHintLevelsByAttemptIds(ids).stream().collect(Collectors.toMap(row -> new StageKey((UUID) row[0], (StageType) row[1]), row -> ((Number) row[2]).intValue()));
+        Map<StageKey, Integer> result = new HashMap<>();
+        hints.findMaxHintLevelsByAttemptIds(ids).forEach(row -> result.put(new StageKey((UUID) row[0], (StageType) row[1]), ((Number) row[2]).intValue()));
+        Map<UUID, StageAssessment> assessmentById = assessments.findByAttemptIdIn(ids).stream().collect(Collectors.toMap(StageAssessment::getId, value -> value));
+        referenceReveals.findByAttemptIdIn(ids).forEach(reveal -> { StageAssessment assessment=assessmentById.get(reveal.getStageAssessmentId()); if (assessment != null) result.merge(new StageKey(reveal.getAttemptId(), assessment.getStageType()), 5, Math::max); });
+        return result;
     }
     private StageMetric stageMetric(StageType stage, List<Attempt> attempts, Map<UUID, Map<StageType, StageAssessment>> data, Map<StageKey, Integer> maxHints) {
         List<StageAssessment> values = completedStages(attempts, data, stage);
@@ -77,7 +82,7 @@ public class AnalyticsService {
     }
     private List<StageAssessment> completedStages(List<Attempt> completed, Map<UUID, Map<StageType, StageAssessment>> data, StageType stage) {
         return completed.stream().map(attempt -> data.getOrDefault(attempt.getId(), Map.of()).get(stage))
-                .filter(Objects::nonNull).filter(value -> value.getScore() != null).toList();
+                .filter(Objects::nonNull).filter(value -> value.getAssessmentStatus() == StageAssessmentStatus.ASSESSED).filter(value -> value.getScore() != null).toList();
     }
     private Metric attemptMetric(List<Attempt> values, Predicate<Attempt> eligible, List<StageType> core,
                                  Map<UUID, Map<StageType, StageAssessment>> data, Map<StageKey, Integer> maxHints, boolean transfer) {
@@ -90,7 +95,7 @@ public class AnalyticsService {
     }
     private boolean successfulTransfer(Attempt attempt, Map<StageKey, Integer> maxHints) { return successfulResult(attempt) && maxHints.entrySet().stream().filter(entry -> entry.getKey().attemptId.equals(attempt.getId())).mapToInt(Map.Entry::getValue).max().orElse(0) <= 2; }
     private boolean successfulResult(Attempt attempt) { return attempt.getFinalResult() == FinalResult.SOLVED_INDEPENDENTLY || attempt.getFinalResult() == FinalResult.SOLVED_WITH_HINT || attempt.getFinalResult() == FinalResult.PARTIALLY_SOLVED; }
-    private boolean hasAllScoredStages(Attempt attempt, List<StageType> core, Map<UUID, Map<StageType, StageAssessment>> data) { return core.stream().allMatch(stage -> Optional.ofNullable(data.getOrDefault(attempt.getId(), Map.of()).get(stage)).map(StageAssessment::getScore).isPresent()); }
+    private boolean hasAllScoredStages(Attempt attempt, List<StageType> core, Map<UUID, Map<StageType, StageAssessment>> data) { return core.stream().allMatch(stage -> Optional.ofNullable(data.getOrDefault(attempt.getId(), Map.of()).get(stage)).filter(value -> value.getAssessmentStatus() == StageAssessmentStatus.ASSESSED).map(StageAssessment::getScore).isPresent()); }
     private boolean allAtLeast(Attempt attempt, List<StageType> core, Map<UUID, Map<StageType, StageAssessment>> data, int score) { return core.stream().allMatch(stage -> data.get(attempt.getId()).get(stage).getScore() >= score); }
     private Metric classificationMetric(List<Attempt> values, Map<UUID, Map<StageType, StageAssessment>> data) {
         List<StageAssessment> answers = values.stream().filter(a -> a.getAttemptType() == AttemptType.CONTRAST_CLASSIFICATION || a.getAttemptType() == AttemptType.MIXED_CLASSIFICATION)

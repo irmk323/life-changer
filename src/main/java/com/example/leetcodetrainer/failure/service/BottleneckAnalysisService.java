@@ -6,6 +6,7 @@ import com.example.leetcodetrainer.failure.domain.*;
 import com.example.leetcodetrainer.failure.dto.*;
 import com.example.leetcodetrainer.failure.repository.*;
 import com.example.leetcodetrainer.hint.repository.HintUsageRepository;
+import com.example.leetcodetrainer.attempt.service.AttemptQualityService;
 import java.time.*;
 import java.util.*;
 import org.springframework.stereotype.Service;
@@ -17,14 +18,17 @@ public class BottleneckAnalysisService {
     private static final int SCORE_ZERO_PENALTY = 100, SCORE_ONE_PENALTY = 35, HINT_LEVEL_WEIGHT = 8, RECURRENCE_WEIGHT = 12;
     private final AttemptRepository attempts; private final StageAssessmentRepository stages; private final HintUsageRepository hints;
     private final FailureLabelRepository labels; private final AttemptFailureLabelRepository attemptLabels;
-    public BottleneckAnalysisService(AttemptRepository attempts, StageAssessmentRepository stages, HintUsageRepository hints, FailureLabelRepository labels, AttemptFailureLabelRepository attemptLabels) {
-        this.attempts=attempts; this.stages=stages; this.hints=hints; this.labels=labels; this.attemptLabels=attemptLabels;
+    private final AttemptQualityService quality;
+    public BottleneckAnalysisService(AttemptRepository attempts, StageAssessmentRepository stages, HintUsageRepository hints, FailureLabelRepository labels, AttemptFailureLabelRepository attemptLabels, AttemptQualityService quality) {
+        this.attempts=attempts; this.stages=stages; this.hints=hints; this.labels=labels; this.attemptLabels=attemptLabels; this.quality=quality;
     }
     public BottleneckAnalysis analyze(UUID attemptId) {
         Attempt attempt = attempts.findById(attemptId).orElseThrow();
+        List<StageAssessment> assessedStages=stages.findByAttemptIdOrderByStageTypeAsc(attemptId);
+        if (!quality.assess(attempt, assessedStages).analysisAllowed()) return new BottleneckAnalysis(List.of(), null);
         Map<FailureLabelCode, BottleneckSuggestion> found = new LinkedHashMap<>();
-        for (StageAssessment stage : stages.findByAttemptIdOrderByStageTypeAsc(attemptId)) {
-            if (stage.getScore() == null || stage.getScore() == 2) continue;
+        for (StageAssessment stage : assessedStages) {
+            if (stage.getAssessmentStatus()!=StageAssessmentStatus.ASSESSED || stage.getScore() == null || stage.getScore() == 2) continue;
             FailureLabelCode code = stageCode(stage.getStageType());
             if (code != null) add(found, code, severity(stage.getScore(), hints.findMaxHintLevel(attemptId, stage.getStageType())), stage, attempt, "stage_score");
         }
@@ -36,7 +40,8 @@ public class BottleneckAnalysisService {
         if (attempt.getAttemptType() == AttemptType.ISOMORPHIC_TRANSFER && hasZeroAmong(attemptId, Set.of(StageType.PROBLEM_RELATION, StageType.REQUIRED_OPERATIONS, StageType.DATA_STRUCTURE_SELECTION, StageType.TRANSFER))) add(found, FailureLabelCode.TRANSFER, FailureSeverity.HIGH, firstZero(attemptId), attempt, "isomorphic_transfer");
         if (attempt.getAttemptType() == AttemptType.CONTRAST_CLASSIFICATION && score(attemptId, StageType.TRANSFER) == 0) add(found, FailureLabelCode.PATTERN_DISCRIMINATION, FailureSeverity.HIGH, stage(attemptId, StageType.TRANSFER), attempt, "contrast_classification");
         if (attempt.isTimedOut() && attempt.getFinalResult() == FinalResult.SOLVED_INDEPENDENTLY) add(found, FailureLabelCode.TIME_PRESSURE, FailureSeverity.MEDIUM, stage(attemptId, StageType.IMPLEMENTATION), attempt, "timed_out_after_independent_solution");
-        List<BottleneckSuggestion> suggestions = found.values().stream().sorted(Comparator.comparingInt(BottleneckSuggestion::heuristicScore).reversed()).toList();
+        // The post-attempt decision is actionable only with one primary and at most two secondary candidates.
+        List<BottleneckSuggestion> suggestions = found.values().stream().sorted(Comparator.comparingInt(BottleneckSuggestion::heuristicScore).reversed()).limit(3).toList();
         return new BottleneckAnalysis(suggestions, suggestions.isEmpty() ? null : suggestions.getFirst());
     }
     private void add(Map<FailureLabelCode,BottleneckSuggestion> found, FailureLabelCode code, FailureSeverity severity, StageAssessment stage, Attempt attempt, String key) {

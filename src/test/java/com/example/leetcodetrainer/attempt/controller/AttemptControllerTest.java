@@ -23,9 +23,12 @@ import com.example.leetcodetrainer.problem.domain.Difficulty;
 import com.example.leetcodetrainer.problem.domain.NeetcodeCategory;
 import com.example.leetcodetrainer.problem.domain.Problem;
 import com.example.leetcodetrainer.problem.service.ProblemCatalogService;
+import com.example.leetcodetrainer.referenceanswer.service.ReferenceAnswerService;
+import com.example.leetcodetrainer.postattempt.service.PostAttemptSummaryService;
 import java.time.Instant;
 import java.util.List;
 import java.util.OptionalInt;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -44,6 +47,8 @@ class AttemptControllerTest {
     @MockBean private ReviewSchedulingService reviewService;
     @MockBean private FailureLabelService failureLabelService;
     @MockBean private CoachingService coachingService;
+    @MockBean private ReferenceAnswerService referenceAnswerService;
+    @MockBean private PostAttemptSummaryService postAttemptSummaryService;
     private UUID problemId;
     private UUID attemptId;
     private Attempt attempt;
@@ -58,11 +63,13 @@ class AttemptControllerTest {
         when(attemptService.currentStage(attemptId)).thenReturn(new StageAssessment(UUID.randomUUID(), attemptId, StageType.PROBLEM_RELATION, Instant.now()));
         when(attemptService.stages(attemptId)).thenReturn(StageType.ordered().stream().map(stage -> new StageAssessment(UUID.randomUUID(), attemptId, stage, Instant.now())).toList());
         when(hintService.progress(eq(attemptId), any(StageType.class))).thenReturn(new HintProgress(List.of(), OptionalInt.of(1)));
+        when(referenceAnswerService.status(eq(attemptId), any(StageType.class))).thenReturn(new com.example.leetcodetrainer.referenceanswer.service.ReferenceAnswerStatus(true, false, 1));
+        when(referenceAnswerService.revealedAnswer(eq(attemptId), any(StageType.class))).thenReturn(Optional.empty());
     }
 
     @Test
     void startsInitialAttemptFromProblemDetail() throws Exception {
-        when(attemptService.start(eq(problemId), eq(AttemptType.INITIAL))).thenReturn(attempt);
+        when(attemptService.startOrResumeInitial(problemId)).thenReturn(attempt);
         mvc.perform(post("/problems/{id}/attempts", problemId))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/attempts/" + attemptId + "/workspace"));

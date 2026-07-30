@@ -13,6 +13,7 @@ import org.springframework.data.repository.query.Param;
 public interface HintUsageRepository extends JpaRepository<HintUsage, UUID> {
     List<HintUsage> findByAttemptIdAndStageTypeOrderByHintLevelAscUsedAtAsc(UUID attemptId, StageType stageType);
     List<HintUsage> findByAttemptIdOrderByUsedAtAsc(UUID attemptId);
+    List<HintUsage> findByAttemptIdInAndStageType(Collection<UUID> attemptIds, StageType stageType);
     Optional<HintUsage> findByAttemptIdAndHintId(UUID attemptId, UUID hintId);
     @Query("select max(usage.hintLevel) from HintUsage usage where usage.attemptId = :attemptId and usage.stageType = :stageType")
     Integer findMaxHintLevel(@Param("attemptId") UUID attemptId, @Param("stageType") StageType stageType);

@@ -15,6 +15,7 @@ public class StageAssessment {
     @Enumerated(EnumType.STRING) @Column(name = "stage_type", nullable = false) private StageType stageType;
     @Lob private String answer;
     private Integer score;
+    @Enumerated(EnumType.STRING) @Column(nullable = false) private StageAssessmentStatus assessmentStatus = StageAssessmentStatus.NOT_STARTED;
     private Long durationSeconds;
     private Instant startedAt; private Instant completedAt;
     @Lob private String evaluatorNotes;
@@ -31,28 +32,30 @@ public class StageAssessment {
 
     protected StageAssessment() { }
     public StageAssessment(UUID id, UUID attemptId, StageType stageType, Instant now) { this.id = id; this.attemptId = attemptId; this.stageType = stageType; this.createdAt = now; this.updatedAt = now; }
-    public void markStarted(Instant now) { if (startedAt == null) { startedAt = now; updatedAt = now; } }
-    /** Records an unvisited stage as an explicit 0 without inventing an answer or evidence. */
+    public void markStarted(Instant now) { if (startedAt == null) { startedAt = now; assessmentStatus = StageAssessmentStatus.IN_PROGRESS; updatedAt = now; } }
+    /** Completion must never turn an unvisited stage into a failed assessment. */
     public void markSkipped(Instant now) {
         if (score != null) return;
-        score = AssessmentScore.NOT_ABLE.getValue();
-        if (startedAt == null) startedAt = now;
-        completedAt = now;
-        durationSeconds = Math.max(0, Duration.between(startedAt, now).getSeconds());
+        assessmentStatus = StageAssessmentStatus.NOT_STARTED;
         updatedAt = now;
     }
     public void save(StageSaveCommand command, Instant now) {
         answer = command.answer(); timeComplexity = command.timeComplexity(); spaceComplexity = command.spaceComplexity(); trace = command.trace();
         updatedRegion = command.updatedRegion(); dataStructure = command.dataStructure(); selectionReason = command.selectionReason();
         requiredOperations.clear(); if (command.requiredOperations() != null) requiredOperations.addAll(command.requiredOperations());
-        if (command.score() != null) complete(command.score(), now); else updatedAt = now;
+        if (command.score() != null) complete(command.score(), now); else { if (assessmentStatus == StageAssessmentStatus.NOT_STARTED) assessmentStatus = StageAssessmentStatus.IN_PROGRESS; updatedAt = now; }
     }
     private void complete(Integer rawScore, Instant now) {
         AssessmentScore assessmentScore = AssessmentScore.fromValue(rawScore);
         validateSpecificInputs(assessmentScore);
-        score = assessmentScore.getValue(); completedAt = now;
+        score = assessmentScore.getValue(); assessmentStatus = StageAssessmentStatus.ASSESSED; completedAt = now;
         if (startedAt == null) startedAt = now;
         durationSeconds = Math.max(0, Duration.between(startedAt, now).getSeconds()); updatedAt = now;
+    }
+    public void setAssessmentStatus(StageAssessmentStatus status, Integer score, Instant now) {
+        if (status == StageAssessmentStatus.ASSESSED) { if (score == null) throw new IllegalArgumentException("評価済みには0〜2点が必要です。"); complete(score, now); return; }
+        if (score != null) throw new IllegalArgumentException("未評価・スキップ・対象外には点数を設定できません。");
+        assessmentStatus = status; this.score = null; completedAt = null; durationSeconds = null; updatedAt = now;
     }
     private void validateSpecificInputs(AssessmentScore assessmentScore) {
         if (assessmentScore == AssessmentScore.NOT_ABLE) return;
@@ -65,7 +68,7 @@ public class StageAssessment {
     }
     private boolean isBlank(String value) { return value == null || value.isBlank(); }
     public UUID getId() { return id; } public UUID getAttemptId() { return attemptId; } public StageType getStageType() { return stageType; }
-    public String getAnswer() { return answer; } public Integer getScore() { return score; } public Long getDurationSeconds() { return durationSeconds; }
+    public String getAnswer() { return answer; } public Integer getScore() { return score; } public StageAssessmentStatus getAssessmentStatus() { return assessmentStatus; } public Long getDurationSeconds() { return durationSeconds; }
     public Instant getStartedAt() { return startedAt; } public Instant getCompletedAt() { return completedAt; }
     public String getTimeComplexity() { return timeComplexity; } public String getSpaceComplexity() { return spaceComplexity; } public String getTrace() { return trace; }
     public UpdatedRegion getUpdatedRegion() { return updatedRegion; } public DataStructureOption getDataStructure() { return dataStructure; }

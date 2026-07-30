@@ -1,0 +1,97 @@
+schemaVersion: 1
+contentVersion: 1
+problemSlug: binary-search
+title: "Binary Search"
+pattern: "Binary Search"
+stages:
+  - stage: PROBLEM_RELATION
+    stageLabel: "求める関係"
+    order: 1
+    applicability: REQUIRED
+    modelAnswer: |
+      昇順配列からtargetと等しいindexを探す。比較結果により、targetが存在し得ない連続領域を半分ずつ除外できる。
+  - stage: BRUTE_FORCE
+    stageLabel: "総当たり"
+    order: 2
+    applicability: REQUIRED
+    modelAnswer: |
+      先頭から順に比較する。時間O(n)、空間O(1)。
+  - stage: REPEATED_WORK
+    stageLabel: "重複処理"
+    order: 3
+    applicability: REQUIRED
+    modelAnswer: |
+      sorted性を使わず、明らかに小さい・大きい要素を1つずつ確認している。
+  - stage: UNRESOLVED_STATE
+    stageLabel: "未解決状態"
+    order: 4
+    applicability: REQUIRED
+    modelAnswer: |
+      targetがまだ存在する可能性のある候補区間[left, right]。区間外は不可能と証明済み。
+  - stage: RESOLUTION_EVENT
+    stageLabel: "確定イベント"
+    order: 5
+    applicability: REQUIRED
+    modelAnswer: |
+      nums[mid]とtargetを比較し、等しければ確定。小さければ左半分、大きければ右半分を除外する。
+  - stage: UPDATED_REGION
+    stageLabel: "更新範囲"
+    order: 6
+    applicability: REQUIRED
+    modelAnswer: |
+      候補区間のprefixまたはsuffixを丸ごと除外し、残る連続区間へ境界を移す。
+  - stage: REQUIRED_OPERATIONS
+    stageLabel: "必要操作"
+    order: 7
+    applicability: REQUIRED
+    modelAnswer: |
+      mid計算、nums[mid]との比較、比較結果に応じたleft/right更新。
+  - stage: DATA_STRUCTURE_SELECTION
+    stageLabel: "データ構造選択"
+    order: 8
+    applicability: REQUIRED
+    modelAnswer: |
+      sorted arrayへのindex accessとleft/right境界変数。追加collectionは不要。
+  - stage: INVARIANT
+    stageLabel: "不変条件"
+    order: 9
+    applicability: REQUIRED
+    modelAnswer: |
+      各反復開始時、targetが存在するなら必ず[left, right]内にある。区間外はtargetではない。
+  - stage: CORRECTNESS_AND_COMPLEXITY
+    stageLabel: "正しさと計算量"
+    order: 10
+    applicability: REQUIRED
+    modelAnswer: |
+      sorted性により片側を安全に捨てられ、各回で区間がほぼ半分になる。時間O(log n)、空間O(1)。
+  - stage: IMPLEMENTATION
+    stageLabel: "実装"
+    order: 11
+    applicability: REQUIRED
+    modelAnswer: |
+      Java例:
+      
+      ```java
+      public int search(int[] nums, int target) {
+          int left = 0, right = nums.length - 1;
+          while (left <= right) {
+              int mid = left + (right - left) / 2;
+              if (nums[mid] == target) return mid;
+              if (nums[mid] < target) left = mid + 1;
+              else right = mid - 1;
+          }
+          return -1;
+      }
+      ```
+  - stage: TRANSFER
+    stageLabel: "転用"
+    order: 12
+    applicability: REQUIRED
+    modelAnswer: |
+      first/last occurrence、lower bound、answer binary search、rotated arrayへ転用できる。必要なのは単調性と候補区間invariant。
+  - stage: REFLECTION
+    stageLabel: "振り返り"
+    order: 13
+    applicability: REQUIRED
+    modelAnswer: |
+      次回のtrigger sentence: 「比較結果から、答えが絶対に存在しない連続領域を捨てられるか」。

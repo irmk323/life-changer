@@ -7,6 +7,7 @@ import com.example.leetcodetrainer.attempt.repository.AttemptRepository;
 import com.example.leetcodetrainer.attempt.repository.StageAssessmentRepository;
 import com.example.leetcodetrainer.attempt.service.AttemptService;
 import com.example.leetcodetrainer.problem.repository.ProblemRepository;
+import com.example.leetcodetrainer.referenceanswer.repository.StageReferenceAnswerRevealRepository;
 import com.example.leetcodetrainer.review.domain.*;
 import com.example.leetcodetrainer.review.repository.ReviewScheduleRepository;
 import java.time.LocalDate;
@@ -27,9 +28,10 @@ class ReviewSchedulingServiceIntegrationTest {
     @Autowired private AttemptRepository attemptRepository;
     @Autowired private StageAssessmentRepository stageAssessmentRepository;
     @Autowired private ProblemRepository problemRepository;
+    @Autowired private StageReferenceAnswerRevealRepository referenceAnswerRevealRepository;
 
     @BeforeEach
-    void clean() { reviewRepository.deleteAll(); stageAssessmentRepository.deleteAll(); attemptRepository.deleteAll(); }
+    void clean() { reviewRepository.deleteAll(); referenceAnswerRevealRepository.deleteAll(); stageAssessmentRepository.deleteAll(); attemptRepository.deleteAll(); }
 
     @Test
     void completedInitialAttemptCreatesExactlyFourDistinctReviewsAndDoesNotDuplicateThem() {

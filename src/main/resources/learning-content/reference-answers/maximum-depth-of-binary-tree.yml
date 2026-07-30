@@ -1,0 +1,91 @@
+schemaVersion: 1
+contentVersion: 1
+problemSlug: maximum-depth-of-binary-tree
+title: "Maximum Depth of Binary Tree"
+pattern: "Tree DFS"
+stages:
+  - stage: PROBLEM_RELATION
+    stageLabel: "求める関係"
+    order: 1
+    applicability: REQUIRED
+    modelAnswer: |
+      rootからleafまでのnode数の最大値。各nodeの答えは1+max(leftDepth,rightDepth)。
+  - stage: BRUTE_FORCE
+    stageLabel: "総当たり"
+    order: 2
+    applicability: REQUIRED
+    modelAnswer: |
+      全root-to-leaf pathを明示的に列挙し、長さを保存して最大を取る。path copyが余分。
+  - stage: REPEATED_WORK
+    stageLabel: "重複処理"
+    order: 3
+    applicability: REQUIRED
+    modelAnswer: |
+      共通prefix pathを何度も複製する。必要なのは各subtreeの最大depthだけ。
+  - stage: UNRESOLVED_STATE
+    stageLabel: "未解決状態"
+    order: 4
+    applicability: REQUIRED
+    modelAnswer: |
+      現在nodeのdepthは左右subtreeのdepthが返るまで未確定。call frameが子の結果を待つ。
+  - stage: RESOLUTION_EVENT
+    stageLabel: "確定イベント"
+    order: 5
+    applicability: REQUIRED
+    modelAnswer: |
+      nullなら0。左右の結果が返ったら1+max(left,right)で現在nodeのdepthが確定する。
+  - stage: UPDATED_REGION
+    stageLabel: "更新範囲"
+    order: 6
+    applicability: REQUIRED
+    modelAnswer: |
+      現在call frameに対応するsubtree結果1つを更新し、親へ返す。
+  - stage: REQUIRED_OPERATIONS
+    stageLabel: "必要操作"
+    order: 7
+    applicability: REQUIRED
+    modelAnswer: |
+      左右childを評価、2結果のmax、1を加えて返す。
+  - stage: DATA_STRUCTURE_SELECTION
+    stageLabel: "データ構造選択"
+    order: 8
+    applicability: REQUIRED
+    modelAnswer: |
+      再帰DFSとcall stack。iterativeならnodeとdepthのpairをStack/Queueに保持する。
+  - stage: INVARIANT
+    stageLabel: "不変条件"
+    order: 9
+    applicability: REQUIRED
+    modelAnswer: |
+      maxDepth(node)は、そのnodeをrootとするsubtreeの正確な最大depthを返す。nullは0。
+  - stage: CORRECTNESS_AND_COMPLEXITY
+    stageLabel: "正しさと計算量"
+    order: 10
+    applicability: REQUIRED
+    modelAnswer: |
+      構造帰納法で正しい。各nodeを1回訪問し時間O(n)、再帰stackはO(h)。
+  - stage: IMPLEMENTATION
+    stageLabel: "実装"
+    order: 11
+    applicability: REQUIRED
+    modelAnswer: |
+      Java例:
+      
+      ```java
+      public int maxDepth(TreeNode root) {
+          if (root == null) return 0;
+          return 1 + Math.max(maxDepth(root.left), maxDepth(root.right));
+      }
+      ```
+  - stage: TRANSFER
+    stageLabel: "転用"
+    order: 12
+    applicability: REQUIRED
+    modelAnswer: |
+      height、minimum depth、balanced tree、diameter、subtree aggregateへ転用できる。子のsummaryを親でcombineするpostorder DFS。
+  - stage: REFLECTION
+    stageLabel: "振り返り"
+    order: 13
+    applicability: REQUIRED
+    modelAnswer: |
+      次回のtrigger sentence: 「親の答えを作るために、左右の子から何を返してもらえばよいか」。

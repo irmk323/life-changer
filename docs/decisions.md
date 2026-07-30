@@ -6,6 +6,9 @@
 | --- | --- |
 | Measure stages, not only outcomes | The product's central claim is cognitive diagnosis and training. Completion without stage evidence cannot establish it. |
 | Keep retention, transfer, and discrimination distinct | Re-solving a known item tests recall; unseen isomorphism tests reuse; mixed tasks test candidate discrimination. Combining them would inflate apparent ability. |
+| Keep missing stage assessments nullable | A score of zero means the learner tried and could not yet explain or execute the stage. Completion leaves untouched stages `NOT_STARTED` with a null score; Quick Assessment may later record 0, 1, 2, skipped, or not applicable. |
+| Treat legacy synthetic zeroes as ambiguous | Earlier completion logic could create zeroes without an answer, hint, reference-answer reveal, or meaningful duration. V21 preserves those rows and derives `LEGACY_AMBIGUOUS`, suppressing bottlenecks and analytics until the learner reviews them. |
+| Gate bottleneck inference on data quality | Fewer than three assessed stages, half or more unassessed stages, legacy ambiguity, or an independent result with all assessed stages at zero prevents automatic FailureLabel suggestions. This avoids turning absent evidence into a diagnosis. |
 | Use learner self-assessment in MVP | It permits a useful offline vertical slice without pretending automated marking can evaluate open-ended reasoning. Scores retain hint evidence for later review. |
 | Hide pattern/category on attempt start by default | Showing labels before relation extraction would train tag-to-solution recall. Reveal after completion or explicit hint escalation. |
 | Store only metadata, learner notes, and original abstractions | This respects the no-scraping/no-unlicensed-copying constraint. External links remain user-initiated. |
@@ -42,6 +45,8 @@
 | Require a confirmed HIGH label before creating a targeted review | Phase 6 supplies a one-day, label-linked `TARGETED_BOTTLENECK` review only by user action. It deduplicates by source Attempt, review type, and failure label; adaptive automatic scheduling remains out of scope. |
 | Persist coaching messages as append-only provider versions | Each generation stores provider name, rule version, structured fields, and rendered text. Regeneration does not rewrite past analysis, so a rule change remains auditable. |
 | Use a local keyword safety-note extension point | The rule-based coach can show a non-diagnostic safety note for a small set of explicit self-harm phrases. It neither assesses risk nor supplies country-specific contacts; false negatives and positives remain a documented limitation. |
+| Withhold Weekly Focus until there is cross-problem evidence | A focus recommendation needs at least three completed Attempts across two Problems and twenty scored StageAssessments. Before that threshold, the dashboard only explains how to collect enough evidence; it does not label a default stage as weak. |
+| Keep manual Weekly Focus selection off the dashboard | The home page offers only adoption of an evidence-based recommendation. A deliberate override is available from the dedicated Weekly Review page so manual selection does not replace the evidence-driven learning model. |
 
 ## Algorithms and policy
 
@@ -161,6 +166,10 @@ diagnose motivation, aptitude, or mental health.
   exemplar; no external prompt or solution text is copied.
 - The configured schedule can be changed for future schedules, but existing
   scheduled reviews remain historical commitments unless explicitly rescheduled.
+- Phase 9教材は問題別YAMLを唯一の本文ソースとする。Flywayは表と制約のみを
+  作成し、起動時importは同一versionを変更せず、新しいversionのみ更新する。
+  模範回答の表示はHintUsageではなく専用reveal eventに保存するが、分析上は
+  同工程のHint Level 5として扱う。
 # Phase 8: 認知工程中心の分析
 
 - 分析の率は `Metric` に分子と分母を保持し、分母が 0 の場合は `N/A` と表示する。未観測を失敗率 0% と解釈しないためである。
@@ -169,3 +178,9 @@ diagnose motivation, aptitude, or mental health.
 - 比較／混合分類にはまだ expected answer を構造化した item がない。Phase 8 では `TRANSFER` 工程に判断理由があり score が記録された Attempt を暫定の観測単位とし、expected-answer 型の分類モデルは将来の明示的な Phase で追加する。
 - pattern candidate と working solution の時間は、現行の stage `durationSeconds`（工程開始から完了まで）を中央値にする。Attempt 開始からの累積時刻は既存の stage timestamp だけでは復元できないため、表示を工程時間として解釈する。
 - WeeklyPlan は単一ローカルユーザーの active plan を一つにし、新しい採用時には前の active plan をキャンセルする。推奨は過去28日の自力成功率が最も低い観測済み工程を使い、データがない場合は問題の関係工程を提案する。
+
+### 学習画面の表示と操作
+
+- `Problem.active` はカタログ上で演習対象として使えるかを示す運用フラグであり、学習者の進捗や習熟度ではない。問題一覧では「演習に使用できます」と表示する。
+- 教材の `contentVersion` はYAMLの更新と回答表示履歴を整合させる内部値である。学習判断には使わないため、利用者向け画面には表示しない。
+- ヒント後に「次へ進めた／まだ考えが進まない」を保存する。これはヒントの効果と依存度を分析するための事実記録であり、自己評価の代替ではない。選択はラジオボタンではなく、意味を明示した保存ボタンで行う。

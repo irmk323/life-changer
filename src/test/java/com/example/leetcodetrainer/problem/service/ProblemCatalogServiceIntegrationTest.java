@@ -40,4 +40,24 @@ class ProblemCatalogServiceIntegrationTest {
                 .extracting(problem -> problem.getTitle())
                 .containsExactly("Valid Parentheses", "Daily Temperatures");
     }
+
+    @Test
+    void keepsTheManualSolvedMarkerOnTheProblemWithoutChangingItsLearningRecords() {
+        var problem = problemRepository.findBySlug("two-sum").orElseThrow();
+
+        problemCatalogService.markSolved(problem.getId());
+
+        assertThat(problemCatalogService.getProblem(problem.getId()).isSolved()).isTrue();
+    }
+
+    @Test
+    void togglesTheManualSolvedMarker() {
+        var problem = problemRepository.findBySlug("two-sum").orElseThrow();
+
+        problemCatalogService.toggleSolved(problem.getId());
+        assertThat(problemCatalogService.getProblem(problem.getId()).isSolved()).isTrue();
+
+        problemCatalogService.toggleSolved(problem.getId());
+        assertThat(problemCatalogService.getProblem(problem.getId()).isSolved()).isFalse();
+    }
 }

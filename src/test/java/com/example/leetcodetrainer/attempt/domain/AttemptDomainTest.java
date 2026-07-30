@@ -44,4 +44,15 @@ class AttemptDomainTest {
         assertEquals(0, attempt.getDurationSeconds());
         assertThrows(IllegalStateException.class, () -> attempt.complete(FinalResult.NOT_SOLVED, startedAt));
     }
+
+    @Test
+    void unassessedAndZeroAreDifferentStates() {
+        StageAssessment assessment = new StageAssessment(UUID.randomUUID(), UUID.randomUUID(), StageType.BRUTE_FORCE, startedAt);
+        assessment.markSkipped(startedAt);
+        assertEquals(null, assessment.getScore());
+        assertEquals(StageAssessmentStatus.NOT_STARTED, assessment.getAssessmentStatus());
+        assessment.setAssessmentStatus(StageAssessmentStatus.ASSESSED, 0, startedAt);
+        assertEquals(0, assessment.getScore());
+        assertEquals(StageAssessmentStatus.ASSESSED, assessment.getAssessmentStatus());
+    }
 }

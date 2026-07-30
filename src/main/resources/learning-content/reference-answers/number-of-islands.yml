@@ -1,0 +1,104 @@
+schemaVersion: 1
+contentVersion: 1
+problemSlug: number-of-islands
+title: "Number of Islands"
+pattern: "Grid Graph Traversal"
+stages:
+  - stage: PROBLEM_RELATION
+    stageLabel: "求める関係"
+    order: 1
+    applicability: REQUIRED
+    modelAnswer: |
+      land cellをnode、上下左右のland隣接をedgeとみなし、connected component数を数える。
+  - stage: BRUTE_FORCE
+    stageLabel: "総当たり"
+    order: 2
+    applicability: REQUIRED
+    modelAnswer: |
+      各land cellから毎回grid全体を探索して所属島を判定する。同じcellや経路を何度も探索し最悪O((mn)²)。
+  - stage: REPEATED_WORK
+    stageLabel: "重複処理"
+    order: 3
+    applicability: REQUIRED
+    modelAnswer: |
+      同じland componentを異なる開始cellから何度も探索している。
+  - stage: UNRESOLVED_STATE
+    stageLabel: "未解決状態"
+    order: 4
+    applicability: REQUIRED
+    modelAnswer: |
+      未訪問land cellと、探索中に発見済みだが近傍処理がまだのfrontier。
+  - stage: RESOLUTION_EVENT
+    stageLabel: "確定イベント"
+    order: 5
+    applicability: REQUIRED
+    modelAnswer: |
+      未訪問landを見つけたら島を1つ数え、到達可能な全landをDFS/BFSで訪問済みにする。
+  - stage: UPDATED_REGION
+    stageLabel: "更新範囲"
+    order: 6
+    applicability: REQUIRED
+    modelAnswer: |
+      開始cellから上下左右で到達可能な不規則なconnected region全体。
+  - stage: REQUIRED_OPERATIONS
+    stageLabel: "必要操作"
+    order: 7
+    applicability: REQUIRED
+    modelAnswer: |
+      未訪問land検出、frontier追加・取得、4方向確認、範囲/land/未訪問確認、mark。
+  - stage: DATA_STRUCTURE_SELECTION
+    stageLabel: "データ構造選択"
+    order: 8
+    applicability: REQUIRED
+    modelAnswer: |
+      DFSならcall stack/Stack、BFSならQueue。visited gridまたは入力grid書換えで訪問済みを表す。
+  - stage: INVARIANT
+    stageLabel: "不変条件"
+    order: 9
+    applicability: REQUIRED
+    modelAnswer: |
+      訪問済みlandは数え済みまたは探索中の島に属し、frontierには発見済み未処理cellだけがある。
+  - stage: CORRECTNESS_AND_COMPLEXITY
+    stageLabel: "正しさと計算量"
+    order: 10
+    applicability: REQUIRED
+    modelAnswer: |
+      各探索は同じ島のlandを全て1回訪問する。各cellを定数回確認し時間O(mn)、空間O(mn) worst case。
+  - stage: IMPLEMENTATION
+    stageLabel: "実装"
+    order: 11
+    applicability: REQUIRED
+    modelAnswer: |
+      Java例:
+      
+      ```java
+      public int numIslands(char[][] grid) {
+          int count = 0;
+          for (int r = 0; r < grid.length; r++) {
+              for (int c = 0; c < grid[0].length; c++) {
+                  if (grid[r][c] == '1') {
+                      count++;
+                      dfs(grid, r, c);
+                  }
+              }
+          }
+          return count;
+      }
+      private void dfs(char[][] g, int r, int c) {
+          if (r < 0 || r >= g.length || c < 0 || c >= g[0].length || g[r][c] != '1') return;
+          g[r][c] = '0';
+          dfs(g, r+1, c); dfs(g, r-1, c); dfs(g, r, c+1); dfs(g, r, c-1);
+      }
+      ```
+  - stage: TRANSFER
+    stageLabel: "転用"
+    order: 12
+    applicability: REQUIRED
+    modelAnswer: |
+      Flood Fill、Max Area of Island、connected components、maze reachabilityへ転用できる。gridを暗黙graphとして見る。
+  - stage: REFLECTION
+    stageLabel: "振り返り"
+    order: 13
+    applicability: REQUIRED
+    modelAnswer: |
+      次回のtrigger sentence: 「同じcomponentを二度数えないため、発見した瞬間に何をmarkするか」。

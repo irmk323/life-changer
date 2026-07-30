@@ -78,9 +78,11 @@ public class HintService {
         List<UUID> patternIds = problemPatternRepository.findByProblemIdOrderByPrimaryPatternDesc(problemId).stream()
                 .filter(association -> association.isPrimaryPattern()).map(association -> association.getPattern().getId()).toList();
         List<Hint> patternHints = patternIds.isEmpty() ? List.of() : hintRepository.findByPatternIdInAndStageTypeAndActiveTrueOrderByHintLevelAscDisplayOrderAsc(patternIds, stageType);
+        List<Hint> genericHints = hintRepository.findByProblemIdIsNullAndPatternIdIsNullAndStageTypeAndActiveTrueOrderByHintLevelAscDisplayOrderAsc(stageType);
         Map<Integer, List<Hint>> byLevel = new TreeMap<>();
         problemHints.forEach(hint -> byLevel.computeIfAbsent(hint.getHintLevel(), ignored -> new ArrayList<>()).add(hint));
         patternHints.forEach(hint -> { if (!byLevel.containsKey(hint.getHintLevel())) byLevel.computeIfAbsent(hint.getHintLevel(), ignored -> new ArrayList<>()).add(hint); });
+        genericHints.forEach(hint -> { if (!byLevel.containsKey(hint.getHintLevel())) byLevel.computeIfAbsent(hint.getHintLevel(), ignored -> new ArrayList<>()).add(hint); });
         return byLevel.values().stream().flatMap(List::stream).sorted(Comparator.comparingInt(Hint::getHintLevel).thenComparingInt(Hint::getDisplayOrder)).toList();
     }
     private Attempt attempt(UUID id) { return attemptRepository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Attempt not found: " + id)); }

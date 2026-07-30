@@ -1,0 +1,98 @@
+schemaVersion: 1
+contentVersion: 1
+problemSlug: two-sum
+title: "Two Sum"
+pattern: "Hash Lookup"
+stages:
+  - stage: PROBLEM_RELATION
+    stageLabel: "求める関係"
+    order: 1
+    applicability: REQUIRED
+    modelAnswer: |
+      配列の異なる2つの位置 i, j について、nums[i] + nums[j] = target を満たすindexの組を探す。中心となる関係は「現在値に必要な補数が、別の位置に存在するか」。
+  - stage: BRUTE_FORCE
+    stageLabel: "総当たり"
+    order: 2
+    applicability: REQUIRED
+    modelAnswer: |
+      すべての組(i, j)を二重ループで確認し、合計がtargetなら返す。時間O(n²)、追加空間O(1)。
+  - stage: REPEATED_WORK
+    stageLabel: "重複処理"
+    order: 3
+    applicability: REQUIRED
+    modelAnswer: |
+      各要素について補数を探すため、同じ過去要素を何度も比較している。すでに見た値を再利用せず、毎回線形探索をやり直している。
+  - stage: UNRESOLVED_STATE
+    stageLabel: "未解決状態"
+    order: 4
+    applicability: REQUIRED
+    modelAnswer: |
+      ここまでに見たが、まだペアが確定していない値とそのindex。過去の値xは、将来target - xが現れるのを待っている。「見た値→index」でも「必要な補数→元index」でも表現できる。
+  - stage: RESOLUTION_EVENT
+    stageLabel: "確定イベント"
+    order: 5
+    applicability: REQUIRED
+    modelAnswer: |
+      現在値の補数 target - current が過去に登録済みのとき、または現在値が「待っている補数」と一致したとき、過去indexと現在indexのペアが確定する。
+  - stage: UPDATED_REGION
+    stageLabel: "更新範囲"
+    order: 6
+    applicability: REQUIRED
+    modelAnswer: |
+      prefixやsuffixではなく、現在値または補数に一致する特定のkeyだけを確認・解決する。
+  - stage: REQUIRED_OPERATIONS
+    stageLabel: "必要操作"
+    order: 7
+    applicability: REQUIRED
+    modelAnswer: |
+      特定keyの存在確認、keyから元indexの取得、新しい値とindexまたは必要な補数と元indexの登録。
+  - stage: DATA_STRUCTURE_SELECTION
+    stageLabel: "データ構造選択"
+    order: 8
+    applicability: REQUIRED
+    modelAnswer: |
+      HashMap。値または補数をkey、indexをvalueにすると、存在確認・取得・登録を平均O(1)で行える。
+  - stage: INVARIANT
+    stageLabel: "不変条件"
+    order: 9
+    applicability: REQUIRED
+    modelAnswer: |
+      index iを処理する直前、Mapにはiより前の要素だけが登録されている。現在値を登録する前に補数を検索するため、同じindexを2回使わない。
+  - stage: CORRECTNESS_AND_COMPLEXITY
+    stageLabel: "正しさと計算量"
+    order: 10
+    applicability: REQUIRED
+    modelAnswer: |
+      解となるi<jが存在するなら、jを処理するときnums[i]は登録済みなので補数検索で必ず見つかる。各要素を1回処理し、時間O(n)、空間O(n)。
+  - stage: IMPLEMENTATION
+    stageLabel: "実装"
+    order: 11
+    applicability: REQUIRED
+    modelAnswer: |
+      Java例:
+      
+      ```java
+      public int[] twoSum(int[] nums, int target) {
+          Map<Integer, Integer> seen = new HashMap<>();
+          for (int i = 0; i < nums.length; i++) {
+              int complement = target - nums[i];
+              if (seen.containsKey(complement)) {
+                  return new int[]{seen.get(complement), i};
+              }
+              seen.put(nums[i], i);
+          }
+          throw new IllegalArgumentException("No solution");
+      }
+      ```
+  - stage: TRANSFER
+    stageLabel: "転用"
+    order: 12
+    applicability: REQUIRED
+    modelAnswer: |
+      現在値に対応する正確な相手が過去に存在するかを問う問題へ転用できる。重複検出、補数検索、prefix sumの差をHashMapで探す問題が同型。
+  - stage: REFLECTION
+    stageLabel: "振り返り"
+    order: 13
+    applicability: REQUIRED
+    modelAnswer: |
+      次回のtrigger sentence: 「各要素が待っている正確な相手を、過去のkeyからO(1)で探せないか」。データ構造名より先に、更新対象が特定keyであることを言語化する。

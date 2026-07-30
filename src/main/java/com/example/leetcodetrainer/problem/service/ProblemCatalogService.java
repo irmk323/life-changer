@@ -63,4 +63,14 @@ public class ProblemCatalogService {
                 .sorted(java.util.Comparator.comparing(NeetcodeCategory::getDisplayName))
                 .toList();
     }
+
+    @Transactional
+    public void markSolved(UUID id) {
+        getProblem(id).markSolved();
+    }
+
+    @Transactional
+    public void toggleSolved(UUID id) {
+        getProblem(id).toggleSolved();
+    }
 }

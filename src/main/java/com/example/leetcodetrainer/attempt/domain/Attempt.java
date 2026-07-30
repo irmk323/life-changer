@@ -16,6 +16,10 @@ public class Attempt {
     @Column(nullable = false) private Instant startedAt;
     private Instant completedAt;
     private Long durationSeconds;
+    private Long activeDurationSeconds;
+    @Enumerated(EnumType.STRING) private PriorExposure priorExposure;
+    @Enumerated(EnumType.STRING) private AttemptDataQualityStatus dataQualityStatus;
+    @Enumerated(EnumType.STRING) private AttemptAnalysisStatus analysisStatus;
     @Column(nullable = false) private int currentStageOrder;
     private String language;
     @Enumerated(EnumType.STRING) private FinalResult finalResult;
@@ -49,8 +53,10 @@ public class Attempt {
     public void moveTo(StageType stage, Instant now) { requireEditable(); currentStageOrder = stage.getOrder(); updatedAt = now; }
     public void complete(FinalResult result, Instant now) {
         requireEditable(); if (result == null) throw new IllegalArgumentException("最終結果を選択してください。");
-        finalResult = result; completedAt = now; durationSeconds = Math.max(0, Duration.between(startedAt, now).getSeconds()); status = AttemptStatus.COMPLETED; updatedAt = now;
+        finalResult = result; completedAt = now; durationSeconds = Math.max(0, Duration.between(startedAt, now).getSeconds()); activeDurationSeconds = durationSeconds; status = AttemptStatus.COMPLETED; updatedAt = now;
     }
+    public void setPriorExposure(PriorExposure priorExposure, Instant now) { this.priorExposure = priorExposure; updatedAt = now; }
+    public void setQuality(AttemptDataQualityStatus dataQualityStatus, AttemptAnalysisStatus analysisStatus, Instant now) { this.dataQualityStatus=dataQualityStatus; this.analysisStatus=analysisStatus; updatedAt=now; }
     public void abandon(Instant now) { requireEditable(); status = AttemptStatus.ABANDONED; updatedAt = now; }
     public void revealPattern(Instant now) { requireEditable(); if (patternRevealedAt == null) patternRevealedAt = now; updatedAt = now; }
     public void saveImplementation(String language, String code, Integer compileErrors, Integer wrongAnswers, boolean timedOut,
@@ -72,7 +78,7 @@ public class Attempt {
     private void requireEditable() { if (status != AttemptStatus.IN_PROGRESS) throw new IllegalStateException("完了または中断した演習は編集できません。"); }
     public UUID getId() { return id; } public UUID getProblemId() { return problemId; } public UUID getSourceReviewScheduleId() { return sourceReviewScheduleId; } public AttemptType getAttemptType() { return attemptType; }
     public AttemptStatus getStatus() { return status; } public Instant getStartedAt() { return startedAt; } public Instant getCompletedAt() { return completedAt; }
-    public Long getDurationSeconds() { return durationSeconds; } public int getCurrentStageOrder() { return currentStageOrder; } public String getLanguage() { return language; }
+    public Long getDurationSeconds() { return durationSeconds; } public Long getActiveDurationSeconds() { return activeDurationSeconds; } public PriorExposure getPriorExposure() { return priorExposure; } public AttemptDataQualityStatus getDataQualityStatus() { return dataQualityStatus; } public AttemptAnalysisStatus getAnalysisStatus() { return analysisStatus; } public int getCurrentStageOrder() { return currentStageOrder; } public String getLanguage() { return language; }
     public FinalResult getFinalResult() { return finalResult; } public String getExternalSubmissionResult() { return externalSubmissionResult; } public String getCode() { return code; }
     public int getCompileErrorCount() { return compileErrorCount; } public int getWrongAnswerCount() { return wrongAnswerCount; } public boolean isTimedOut() { return timedOut; }
     public boolean isImplementationCompleted() { return implementationCompleted; } public boolean isUnderstoodButCouldNotImplement() { return understoodButCouldNotImplement; }

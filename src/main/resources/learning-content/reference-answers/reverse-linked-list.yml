@@ -1,0 +1,98 @@
+schemaVersion: 1
+contentVersion: 1
+problemSlug: reverse-linked-list
+title: "Reverse Linked List"
+pattern: "Iterative Pointer Reversal"
+stages:
+  - stage: PROBLEM_RELATION
+    stageLabel: "求める関係"
+    order: 1
+    applicability: REQUIRED
+    modelAnswer: |
+      各nodeのnext方向を逆向きに変更し、元の末尾nodeを新しいheadとして返す。値ではなくlinkを反転する。
+  - stage: BRUTE_FORCE
+    stageLabel: "総当たり"
+    order: 2
+    applicability: REQUIRED
+    modelAnswer: |
+      値を配列へコピーし、逆順に新しいlistを作る。時間O(n)、追加空間O(n)。
+  - stage: REPEATED_WORK
+    stageLabel: "重複処理"
+    order: 3
+    applicability: REQUIRED
+    modelAnswer: |
+      値のコピーとnode再生成は、既存nodeのnextを書き換えれば不要。
+  - stage: UNRESOLVED_STATE
+    stageLabel: "未解決状態"
+    order: 4
+    applicability: REQUIRED
+    modelAnswer: |
+      反転済みprefixのheadであるprevと、未処理suffixの先頭current。current以降を失わず1nodeずつ移す。
+  - stage: RESOLUTION_EVENT
+    stageLabel: "確定イベント"
+    order: 5
+    applicability: REQUIRED
+    modelAnswer: |
+      current.nextを保存後、current.next=prevへ変えると、そのnodeの向きが確定する。
+  - stage: UPDATED_REGION
+    stageLabel: "更新範囲"
+    order: 6
+    applicability: REQUIRED
+    modelAnswer: |
+      反転済みprefixと未処理suffixの境界にあるcurrent nodeだけを更新する。
+  - stage: REQUIRED_OPERATIONS
+    stageLabel: "必要操作"
+    order: 7
+    applicability: REQUIRED
+    modelAnswer: |
+      current.next保存、nextの付け替え、prev更新、currentを保存済みnextへ進める。
+  - stage: DATA_STRUCTURE_SELECTION
+    stageLabel: "データ構造選択"
+    order: 8
+    applicability: REQUIRED
+    modelAnswer: |
+      prev/current/nextの3 pointerで十分。追加collectionは不要。
+  - stage: INVARIANT
+    stageLabel: "不変条件"
+    order: 9
+    applicability: REQUIRED
+    modelAnswer: |
+      prevは処理済みprefixを正しく反転したhead、currentは未処理suffixのhead。保存済みnextによりnodeを失わない。
+  - stage: CORRECTNESS_AND_COMPLEXITY
+    stageLabel: "正しさと計算量"
+    order: 10
+    applicability: REQUIRED
+    modelAnswer: |
+      各反復で1nodeを反転済みprefixへ移す。全node処理後prevが新head。時間O(n)、空間O(1)。
+  - stage: IMPLEMENTATION
+    stageLabel: "実装"
+    order: 11
+    applicability: REQUIRED
+    modelAnswer: |
+      Java例:
+      
+      ```java
+      public ListNode reverseList(ListNode head) {
+          ListNode prev = null;
+          ListNode current = head;
+          while (current != null) {
+              ListNode next = current.next;
+              current.next = prev;
+              prev = current;
+              current = next;
+          }
+          return prev;
+      }
+      ```
+  - stage: TRANSFER
+    stageLabel: "転用"
+    order: 12
+    applicability: REQUIRED
+    modelAnswer: |
+      区間反転、k-group reversal、pointer rewiringへ転用できる。書き換え前に失われる参照を保存する。
+  - stage: REFLECTION
+    stageLabel: "振り返り"
+    order: 13
+    applicability: REQUIRED
+    modelAnswer: |
+      次回のtrigger sentence: 「pointerを書き換える前に、どの参照を失うか」。prefixとsuffixの境界を図にする。

@@ -28,7 +28,6 @@ public class Hint {
     protected Hint() { }
     public Hint(UUID id, UUID problemId, UUID patternId, StageType stageType, int hintLevel, String content,
                 int displayOrder, boolean active, Instant now) {
-        if (problemId == null && patternId == null) throw new IllegalArgumentException("ヒントには問題またはパターンが必要です。");
         if (hintLevel < 1 || hintLevel > 5) throw new IllegalArgumentException("ヒントレベルは1〜5です。");
         this.id = id; this.problemId = problemId; this.patternId = patternId; this.stageType = stageType; this.hintLevel = hintLevel;
         this.content = content; this.displayOrder = displayOrder; this.active = active; this.createdAt = now; this.updatedAt = now;
@@ -36,4 +35,5 @@ public class Hint {
     public UUID getId() { return id; } public UUID getProblemId() { return problemId; } public UUID getPatternId() { return patternId; }
     public StageType getStageType() { return stageType; } public int getHintLevel() { return hintLevel; } public String getContent() { return content; }
     public int getDisplayOrder() { return displayOrder; } public boolean isActive() { return active; }
+    public void updateContent(String content, Instant now) { this.content = content; this.updatedAt = now; }
 }

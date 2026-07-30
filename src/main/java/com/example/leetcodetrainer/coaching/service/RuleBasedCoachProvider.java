@@ -3,6 +3,7 @@ import com.example.leetcodetrainer.attempt.domain.*; import com.example.leetcode
 @Component public class RuleBasedCoachProvider implements CoachProvider {
  public String name(){return "RuleBasedCoach";} public String version(){return "2";}
  public CoachingResponse generate(CoachingContext c){
+  if(c.attempt().getAnalysisStatus()!=AttemptAnalysisStatus.READY) return new CoachingResponse("今回の到達点は記録されています。", "工程別評価が未入力または確認待ちのため、ボトルネックは作成していません。", "未評価は、できなかったことを意味しません。", "Quick Assessmentで、各工程を自力・ヒントあり・未達・未評価に分けてください。", "工程別の根拠が不足しているため、一般化した結論は出していません。", null, null);
   List<String> independent=c.stages().stream().filter(s->Integer.valueOf(2).equals(s.getScore())).map(s->s.getStageType().getDisplayName()).toList(); BottleneckSuggestion primary=c.analysis().primary();
   String observation=independent.isEmpty()?"今回、自力で完了した工程の記録はまだ十分ではありません。":"今回は「"+String.join("・",independent.stream().limit(3).toList())+"」をヒントなしで完了しました。";
   String bottleneck=primary==null?"確認済みの主要ボトルネックはまだありません。":primary.evidence().stage()==null?"現在の候補は「"+primary.label().getDisplayName()+"」です。":""+primary.evidence().stage().getDisplayName()+"で score "+primary.evidence().score()+"、Hint Level "+primary.evidence().maxHintLevel()+"でした。";

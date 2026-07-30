@@ -8,6 +8,7 @@ import com.example.leetcodetrainer.attempt.service.AttemptService;
 import com.example.leetcodetrainer.failure.domain.*;
 import com.example.leetcodetrainer.failure.repository.*;
 import com.example.leetcodetrainer.problem.repository.ProblemRepository;
+import com.example.leetcodetrainer.referenceanswer.repository.StageReferenceAnswerRevealRepository;
 import com.example.leetcodetrainer.review.repository.ReviewScheduleRepository;
 import java.util.Set;
 import org.junit.jupiter.api.*;
@@ -21,15 +22,16 @@ class FailureLabelServiceIntegrationTest {
     @Autowired private AttemptService attemptService; @Autowired private FailureLabelService failureService;
     @Autowired private AttemptRepository attempts; @Autowired private StageAssessmentRepository stages; @Autowired private AttemptFailureLabelRepository attemptLabels;
     @Autowired private ReviewScheduleRepository reviews; @Autowired private ProblemRepository problems; @Autowired private FailureLabelRepository labels;
+    @Autowired private StageReferenceAnswerRevealRepository referenceAnswerReveals;
 
-    @BeforeEach void clean() { reviews.deleteAll(); stages.deleteAll(); attempts.deleteAll(); }
+    @BeforeEach void clean() { reviews.deleteAll(); referenceAnswerReveals.deleteAll(); stages.deleteAll(); attempts.deleteAll(); }
 
     @Test
     void completedAttemptCreatesEvidenceBasedUpdatedRegionSuggestionThatTheUserCanConfirmAndReview() {
         assertThat(labels.findByActiveTrueOrderByDisplayOrderAsc()).hasSize(25);
         Attempt attempt = attemptService.start(problems.findByActiveTrueOrderByLeetcodeNumberAsc().getFirst().getId(), AttemptType.INITIAL);
         for (StageType stage : StageType.ordered()) attemptService.saveStage(attempt.getId(), stage,
-                new StageSaveCommand("記録", 0, null, null, null, null, null, null, Set.of()));
+                new StageSaveCommand("記録", stage.getOrder() < StageType.UPDATED_REGION.getOrder() ? 2 : 0, null, null, null, null, null, null, Set.of()));
         attemptService.complete(attempt.getId(), FinalResult.PARTIALLY_SOLVED);
 
         AttemptFailureLabel suggested = failureService.entries(attempt.getId()).stream().filter(item -> item.getFailureLabel().getCode() == FailureLabelCode.UPDATED_REGION_IDENTIFICATION).findFirst().orElseThrow();

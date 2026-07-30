@@ -13,6 +13,7 @@ import com.example.leetcodetrainer.attempt.repository.AttemptRepository;
 import com.example.leetcodetrainer.attempt.repository.StageAssessmentRepository;
 import com.example.leetcodetrainer.problem.repository.ProblemRepository;
 import com.example.leetcodetrainer.review.repository.ReviewScheduleRepository;
+import com.example.leetcodetrainer.referenceanswer.repository.StageReferenceAnswerRevealRepository;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,12 +33,13 @@ class AttemptServiceIntegrationTest {
     @Autowired private ProblemRepository problemRepository;
     @Autowired private MockMvc mockMvc;
     @Autowired private ReviewScheduleRepository reviewScheduleRepository;
+    @Autowired private StageReferenceAnswerRevealRepository referenceAnswerRevealRepository;
 
     @BeforeEach
-    void cleanAttempts() { reviewScheduleRepository.deleteAll(); stageAssessmentRepository.deleteAll(); attemptRepository.deleteAll(); }
+    void cleanAttempts() { reviewScheduleRepository.deleteAll(); referenceAnswerRevealRepository.deleteAll(); stageAssessmentRepository.deleteAll(); attemptRepository.deleteAll(); }
 
     @Test
-    void startsWithThirteenDraftsAndRecordsUnvisitedStagesAsZeroWhenCompleted() {
+    void startsWithThirteenDraftsAndKeepsUnvisitedStagesUnassessedWhenCompleted() {
         var problem = problemRepository.findByActiveTrueOrderByLeetcodeNumberAsc().getFirst();
         Attempt attempt = attemptService.start(problem.getId(), AttemptType.INITIAL);
         assertEquals(13, attemptService.stages(attempt.getId()).size());
@@ -47,7 +49,8 @@ class AttemptServiceIntegrationTest {
         assertEquals("二要素の関係", attemptService.stage(attempt.getId(), StageType.PROBLEM_RELATION).getAnswer());
         attemptService.complete(attempt.getId(), FinalResult.NOT_SOLVED);
         assertEquals(AttemptStatus.COMPLETED, attemptRepository.findById(attempt.getId()).orElseThrow().getStatus());
-        assertEquals(0, attemptService.stage(attempt.getId(), StageType.BRUTE_FORCE).getScore());
+        assertEquals(null, attemptService.stage(attempt.getId(), StageType.BRUTE_FORCE).getScore());
+        assertEquals(StageAssessmentStatus.NOT_STARTED, attemptService.stage(attempt.getId(), StageType.BRUTE_FORCE).getAssessmentStatus());
 
         Attempt fullyRecorded = attemptService.start(problem.getId(), AttemptType.INITIAL);
 
@@ -66,7 +69,7 @@ class AttemptServiceIntegrationTest {
     }
 
     @Test
-    void workspaceRendersTheCognitiveStageAndHidesPatternNamesInitially() throws Exception {
+    void workspaceRendersTheCognitiveStageWithoutPatternNameAnswerChecking() throws Exception {
         var problem = problemRepository.findByActiveTrueOrderByLeetcodeNumberAsc().getFirst();
         Attempt attempt = attemptService.start(problem.getId(), AttemptType.INITIAL);
 
@@ -75,8 +78,25 @@ class AttemptServiceIntegrationTest {
                 .andExpect(content().string(containsString("問題の関係")))
                 .andExpect(content().string(containsString("考えるためのヒント")))
                 .andExpect(content().string(containsString("次に見られるヒント: レベル 1")))
-                .andExpect(content().string(containsString("パターン名を確認する")))
+                .andExpect(content().string(containsString("思考の13工程")))
+                .andExpect(content().string(not(containsString("パターン名を確認する"))))
                 .andExpect(content().string(not(containsString("Hash Lookup"))));
+    }
+
+    @Test
+    void completedAttemptShowsQuickAssessmentInsteadOfTreatingMissingStagesAsFailures() throws Exception {
+        var problem = problemRepository.findByActiveTrueOrderByLeetcodeNumberAsc().getFirst();
+        Attempt attempt = attemptService.start(problem.getId(), AttemptType.INITIAL);
+        attemptService.complete(attempt.getId(), FinalResult.SOLVED_INDEPENDENTLY, PriorExposure.MEMORISED);
+
+        mockMvc.perform(get("/attempts/{id}", attempt.getId()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("工程別分析はまだ作成しません")))
+                .andExpect(content().string(containsString("Quick Assessmentを始める")))
+                .andExpect(content().string(not(containsString("まず見直したい候補"))));
+        mockMvc.perform(get("/attempts/{id}/quick-assessment", attempt.getId()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("未入力は失敗として扱いません")));
     }
 
     @Test

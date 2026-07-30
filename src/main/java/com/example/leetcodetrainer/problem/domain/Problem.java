@@ -40,6 +40,9 @@ public class Problem {
     private boolean active;
 
     @Column(nullable = false)
+    private boolean solved;
+
+    @Column(nullable = false)
     private Instant createdAt;
 
     @Column(nullable = false)
@@ -51,6 +54,12 @@ public class Problem {
     public Problem(UUID id, Integer leetcodeNumber, String title, String slug, String externalUrl,
                    Difficulty difficulty, NeetcodeCategory neetcodeCategory, boolean active,
                    Instant createdAt, Instant updatedAt) {
+        this(id, leetcodeNumber, title, slug, externalUrl, difficulty, neetcodeCategory, active, false, createdAt, updatedAt);
+    }
+
+    public Problem(UUID id, Integer leetcodeNumber, String title, String slug, String externalUrl,
+                   Difficulty difficulty, NeetcodeCategory neetcodeCategory, boolean active, boolean solved,
+                   Instant createdAt, Instant updatedAt) {
         this.id = id;
         this.leetcodeNumber = leetcodeNumber;
         this.title = title;
@@ -59,6 +68,7 @@ public class Problem {
         this.difficulty = difficulty;
         this.neetcodeCategory = neetcodeCategory;
         this.active = active;
+        this.solved = solved;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
     }
@@ -71,4 +81,7 @@ public class Problem {
     public Difficulty getDifficulty() { return difficulty; }
     public NeetcodeCategory getNeetcodeCategory() { return neetcodeCategory; }
     public boolean isActive() { return active; }
+    public boolean isSolved() { return solved; }
+    public void markSolved() { solved = true; }
+    public void toggleSolved() { solved = !solved; }
 }

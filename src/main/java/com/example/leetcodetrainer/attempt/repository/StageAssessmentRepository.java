@@ -14,4 +14,5 @@ public interface StageAssessmentRepository extends JpaRepository<StageAssessment
     @EntityGraph(attributePaths = "requiredOperations")
     Optional<StageAssessment> findByAttemptIdAndStageType(UUID attemptId, StageType stageType);
     List<StageAssessment> findByAttemptIdIn(Collection<UUID> attemptIds);
+    List<StageAssessment> findByAttemptIdInAndStageType(Collection<UUID> attemptIds, StageType stageType);
 }

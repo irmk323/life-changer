@@ -9,6 +9,8 @@ import com.example.leetcodetrainer.review.service.ReviewSchedulingService;
 import com.example.leetcodetrainer.failure.service.FailureLabelService;
 import com.example.leetcodetrainer.failure.domain.FailureSeverity;
 import com.example.leetcodetrainer.coaching.service.CoachingService;
+import com.example.leetcodetrainer.referenceanswer.service.ReferenceAnswerService;
+import com.example.leetcodetrainer.postattempt.service.PostAttemptSummaryService;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashSet;
@@ -27,14 +29,16 @@ public class AttemptController {
     private final ReviewSchedulingService reviewService;
     private final FailureLabelService failureLabelService;
     private final CoachingService coachingService;
+    private final ReferenceAnswerService referenceAnswerService;
+    private final PostAttemptSummaryService postAttemptSummaryService;
     public AttemptController(AttemptService attemptService, ProblemCatalogService problemCatalogService, PatternCatalogService patternCatalogService,
-                             HintService hintService, ReviewSchedulingService reviewService, FailureLabelService failureLabelService, CoachingService coachingService) {
-        this.attemptService = attemptService; this.problemCatalogService = problemCatalogService; this.patternCatalogService = patternCatalogService; this.hintService = hintService; this.reviewService = reviewService; this.failureLabelService = failureLabelService; this.coachingService = coachingService;
+                             HintService hintService, ReviewSchedulingService reviewService, FailureLabelService failureLabelService, CoachingService coachingService, ReferenceAnswerService referenceAnswerService, PostAttemptSummaryService postAttemptSummaryService) {
+        this.attemptService = attemptService; this.problemCatalogService = problemCatalogService; this.patternCatalogService = patternCatalogService; this.hintService = hintService; this.reviewService = reviewService; this.failureLabelService = failureLabelService; this.coachingService = coachingService; this.referenceAnswerService=referenceAnswerService; this.postAttemptSummaryService=postAttemptSummaryService;
     }
     @PostMapping("/problems/{problemId}/attempts")
     public String start(@PathVariable UUID problemId) {
         problemCatalogService.getProblem(problemId);
-        return "redirect:/attempts/" + attemptService.start(problemId, AttemptType.INITIAL).getId() + "/workspace";
+        return "redirect:/attempts/" + attemptService.startOrResumeInitial(problemId).getId() + "/workspace";
     }
     @GetMapping("/attempts/{id}/workspace")
     public String workspace(@PathVariable UUID id, @RequestParam(required = false) StageType stage, Model model) {
@@ -65,6 +69,15 @@ public class AttemptController {
         try { hintService.revealNext(id, stage); attributes.addFlashAttribute("message", "次の足場となるヒントを表示しました。"); }
         catch (IllegalArgumentException | IllegalStateException exception) { attributes.addFlashAttribute("error", exception.getMessage()); }
         return "redirect:/attempts/" + id + "/workspace?stage=" + stage;
+    }
+    @GetMapping("/attempts/{id}/stages/{stage}/reference-answer/status")
+    @ResponseBody
+    public com.example.leetcodetrainer.referenceanswer.service.ReferenceAnswerStatus referenceAnswerStatus(@PathVariable UUID id, @PathVariable StageType stage) { return referenceAnswerService.status(id, stage); }
+    @PostMapping("/attempts/{id}/stages/{stage}/reference-answer/reveal")
+    public String revealReferenceAnswer(@PathVariable UUID id, @PathVariable StageType stage, RedirectAttributes attributes) {
+        try { referenceAnswerService.reveal(id, stage); attributes.addFlashAttribute("message", "この工程の模範回答を表示しました。自分の言葉で再評価してください。"); }
+        catch (RuntimeException exception) { attributes.addFlashAttribute("error", exception.getMessage()); }
+        return "redirect:/attempts/"+id+"/workspace?stage="+stage;
     }
     @PostMapping("/attempts/{id}/hint-usages/{usageId}/outcome")
     public String recordHintOutcome(@PathVariable UUID id, @PathVariable UUID usageId, @RequestParam(required = false) Boolean helpedUserProceed,
@@ -100,10 +113,14 @@ public class AttemptController {
     @PostMapping("/attempts/{id}/reveal-pattern")
     public String revealPattern(@PathVariable UUID id) { attemptService.revealPattern(id); return "redirect:/attempts/" + id + "/workspace"; }
     @PostMapping("/attempts/{id}/complete")
-    public String complete(@PathVariable UUID id, @RequestParam(required = false) FinalResult finalResult, RedirectAttributes attributes) {
-        try { attemptService.complete(id, finalResult); return "redirect:/attempts/" + id; }
+    public String complete(@PathVariable UUID id, @RequestParam(required = false) FinalResult finalResult, @RequestParam(required = false) com.example.leetcodetrainer.attempt.domain.PriorExposure priorExposure, RedirectAttributes attributes) {
+        try { attemptService.complete(id, finalResult, priorExposure); return "redirect:/attempts/" + id; }
         catch (IllegalArgumentException | IllegalStateException exception) { attributes.addFlashAttribute("error", exception.getMessage()); return "redirect:/attempts/" + id + "/workspace"; }
     }
+    @GetMapping("/attempts/{id}/quick-assessment")
+    public String quickAssessment(@PathVariable UUID id, Model model) { Attempt attempt=attemptService.get(id); model.addAttribute("attempt",attempt); model.addAttribute("problem",problemCatalogService.getProblem(attempt.getProblemId())); model.addAttribute("stages",attemptService.stages(id)); model.addAttribute("statuses",com.example.leetcodetrainer.attempt.domain.StageAssessmentStatus.values()); return "attempts/quick-assessment"; }
+    @PostMapping("/attempts/{id}/quick-assessment")
+    public String saveQuickAssessment(@PathVariable UUID id, @RequestParam org.springframework.util.MultiValueMap<String,String> assessment, RedirectAttributes attributes) { try { java.util.Map<StageType,Integer> scores=new java.util.EnumMap<>(StageType.class); java.util.Map<StageType,com.example.leetcodetrainer.attempt.domain.StageAssessmentStatus> statuses=new java.util.EnumMap<>(StageType.class); assessment.forEach((key,value)->{String[] p=key.split(":"); if(p.length!=2)return; StageType stage=StageType.valueOf(p[1]); if("score".equals(p[0]))scores.put(stage,Integer.valueOf(value.getFirst())); else statuses.put(stage,com.example.leetcodetrainer.attempt.domain.StageAssessmentStatus.valueOf(value.getFirst()));}); attemptService.quickAssess(id,scores,statuses); attributes.addFlashAttribute("message","Quick Assessmentを保存しました。"); } catch(RuntimeException e){attributes.addFlashAttribute("error",e.getMessage());} return "redirect:/attempts/"+id; }
     @PostMapping("/attempts/{id}/abandon")
     public String abandon(@PathVariable UUID id) { Attempt attempt = attemptService.get(id); attemptService.abandon(id); return "redirect:/problems/" + attempt.getProblemId(); }
     @GetMapping("/attempts/{id}")
@@ -111,7 +128,9 @@ public class AttemptController {
         Attempt attempt = attemptService.get(id);
         if (attempt.getStatus() == AttemptStatus.IN_PROGRESS) return "redirect:/attempts/" + id + "/workspace";
         model.addAttribute("attempt", attempt); model.addAttribute("problem", problemCatalogService.getProblem(attempt.getProblemId()));
-        model.addAttribute("stages", attemptService.stages(id)); model.addAttribute("hintUsages", hintService.usagesForAttempt(id));
+        model.addAttribute("attemptHistory", attemptService.historyForProblem(attempt.getProblemId()).stream()
+                .filter(previous -> !previous.getId().equals(attempt.getId())).toList());
+        model.addAttribute("stages", attemptService.stages(id)); model.addAttribute("hintUsages", hintService.usagesForAttempt(id)); model.addAttribute("referenceReveals", referenceAnswerService.revealsForAttempt(id)); model.addAttribute("summary", postAttemptSummaryService.summary(attempt));
         if (attempt.getStatus() == AttemptStatus.COMPLETED) { model.addAttribute("bottleneckAnalysis", failureLabelService.analysis(id)); model.addAttribute("failureLabels", failureLabelService.entries(id)); model.addAttribute("activeFailureLabels", failureLabelService.activeLabels()); model.addAttribute("coaching", coachingService.latest(id)); }
         return "attempts/detail";
     }
@@ -133,6 +152,9 @@ public class AttemptController {
         model.addAttribute("updatedRegions", UpdatedRegion.values()); model.addAttribute("operations", RequiredOperation.values());
         model.addAttribute("dataStructures", DataStructureOption.values()); model.addAttribute("finalResults", FinalResult.values());
         model.addAttribute("hintProgress", hintService.progress(attempt.getId(), current.getStageType()));
+        var referenceStatus = referenceAnswerService.status(attempt.getId(), current.getStageType());
+        model.addAttribute("referenceAnswerStatus", referenceStatus);
+        referenceAnswerService.revealedAnswer(attempt.getId(), current.getStageType()).ifPresent(answer -> model.addAttribute("referenceAnswer", answer));
         if (attempt.getSourceReviewScheduleId() != null) model.addAttribute("reviewContext", reviewService.detail(attempt.getSourceReviewScheduleId()));
         model.addAttribute("elapsedSeconds", Math.max(0, Duration.between(attempt.getStartedAt(), Instant.now()).getSeconds()));
         if (attempt.getPatternRevealedAt() != null) model.addAttribute("associations", patternCatalogService.findPatternsForProblem(attempt.getProblemId()));

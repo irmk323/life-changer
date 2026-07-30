@@ -1,0 +1,99 @@
+schemaVersion: 1
+contentVersion: 1
+problemSlug: daily-temperatures
+title: "Daily Temperatures"
+pattern: "Monotonic Stack"
+stages:
+  - stage: PROBLEM_RELATION
+    stageLabel: "求める関係"
+    order: 1
+    applicability: REQUIRED
+    modelAnswer: |
+      各index iについて、右側の最初のjでtemperatures[j] > temperatures[i]となるものを探し、j-iを返す。
+  - stage: BRUTE_FORCE
+    stageLabel: "総当たり"
+    order: 2
+    applicability: REQUIRED
+    modelAnswer: |
+      各日から右へ走査し、最初のより高い温度を探す。最悪O(n²)。
+  - stage: REPEATED_WORK
+    stageLabel: "重複処理"
+    order: 3
+    applicability: REQUIRED
+    modelAnswer: |
+      同じ未来温度を複数の過去日が何度も比較している。未解決日をまとめて管理していない。
+  - stage: UNRESOLVED_STATE
+    stageLabel: "未解決状態"
+    order: 4
+    applicability: REQUIRED
+    modelAnswer: |
+      まだ右側により高い温度が見つかっていない過去日のindex。各日が、自分より高い未来温度を待っている。
+  - stage: RESOLUTION_EVENT
+    stageLabel: "確定イベント"
+    order: 5
+    applicability: REQUIRED
+    modelAnswer: |
+      現在温度が未解決候補の末尾温度より高いとき、その日の答えが現在indexとの差で確定する。
+  - stage: UPDATED_REGION
+    stageLabel: "更新範囲"
+    order: 6
+    applicability: REQUIRED
+    modelAnswer: |
+      未解決候補の末尾から、現在温度より低い要素が連続するsuffix。現在温度以上に到達したら停止する。
+  - stage: REQUIRED_OPERATIONS
+    stageLabel: "必要操作"
+    order: 7
+    applicability: REQUIRED
+    modelAnswer: |
+      末尾を見る、条件を満たす間末尾を削除、answerへ距離を書く、現在indexを末尾へ追加する。
+  - stage: DATA_STRUCTURE_SELECTION
+    stageLabel: "データ構造選択"
+    order: 8
+    applicability: REQUIRED
+    modelAnswer: |
+      indexを保持するStack/Deque。必要操作が末尾peek/pop/pushでLIFOだから。
+  - stage: INVARIANT
+    stageLabel: "不変条件"
+    order: 9
+    applicability: REQUIRED
+    modelAnswer: |
+      Stack内indexは増加順、対応温度はbottomからtopへ単調非増加。全要素は未解決。top温度が現在以上なら奥も現在以上なので停止できる。
+  - stage: CORRECTNESS_AND_COMPLEXITY
+    stageLabel: "正しさと計算量"
+    order: 10
+    applicability: REQUIRED
+    modelAnswer: |
+      各indexは最初により高い温度が現れたときだけpopされる。最大1回push、1回popなので時間O(n)、空間O(n)。
+  - stage: IMPLEMENTATION
+    stageLabel: "実装"
+    order: 11
+    applicability: REQUIRED
+    modelAnswer: |
+      Java例:
+      
+      ```java
+      public int[] dailyTemperatures(int[] temperatures) {
+          int[] answer = new int[temperatures.length];
+          Deque<Integer> stack = new ArrayDeque<>();
+          for (int i = 0; i < temperatures.length; i++) {
+              while (!stack.isEmpty() && temperatures[i] > temperatures[stack.peek()]) {
+                  int previous = stack.pop();
+                  answer[previous] = i - previous;
+              }
+              stack.push(i);
+          }
+          return answer;
+      }
+      ```
+  - stage: TRANSFER
+    stageLabel: "転用"
+    order: 12
+    applicability: REQUIRED
+    modelAnswer: |
+      Next Greater/Smaller Element、Stock Span、Largest Rectangleなどへ転用できる。比較記号、保持対象、pop時の計算を変える。
+  - stage: REFLECTION
+    stageLabel: "振り返り"
+    order: 13
+    applicability: REQUIRED
+    modelAnswer: |
+      次回のtrigger sentence: 「新しい値が、未解決候補のどの端から何件連続で解決するか」。Stack名より先に末尾操作と停止理由を言語化する。
