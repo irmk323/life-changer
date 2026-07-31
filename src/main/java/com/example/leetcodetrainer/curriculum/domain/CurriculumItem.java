@@ -1,0 +1,3 @@
+package com.example.leetcodetrainer.curriculum.domain;
+import jakarta.persistence.*; import java.util.*;
+@Entity @Table(name="curriculum_item") public class CurriculumItem { @Id private UUID id; @Column(name="problem_id") private UUID problemId; @Column(name="pattern_id") private UUID patternId; @Enumerated(EnumType.STRING) private CurriculumRole role; private int displayOrder; private boolean active; @Lob private String notes; protected CurriculumItem(){} public UUID getProblemId(){return problemId;} public UUID getPatternId(){return patternId;} public CurriculumRole getRole(){return role;} public int getDisplayOrder(){return displayOrder;} public boolean isActive(){return active;} public String getNotes(){return notes;} }

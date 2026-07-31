@@ -1,0 +1,2 @@
+package com.example.leetcodetrainer.curriculum.domain;
+public enum ProblemExposureState { NEVER_SEEN, TITLE_OR_PROMPT_SEEN, ATTEMPTED_WITHOUT_SOLUTION, SOLUTION_SEEN, UNDERSTOOD_BUT_FORGOTTEN, APPROACH_REMEMBERED, CODE_MEMORISED }
