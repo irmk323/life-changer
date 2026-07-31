@@ -1,0 +1,1 @@
+package com.example.leetcodetrainer.implementation.repository; import com.example.leetcodetrainer.implementation.domain.*; import java.util.*; import org.springframework.data.jpa.repository.JpaRepository; public interface ImplementationRecordRepository extends JpaRepository<ImplementationRecord,UUID>{Optional<ImplementationRecord> findByAttemptId(UUID attemptId);}

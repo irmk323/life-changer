@@ -25,6 +25,7 @@ import com.example.leetcodetrainer.problem.domain.Problem;
 import com.example.leetcodetrainer.problem.service.ProblemCatalogService;
 import com.example.leetcodetrainer.referenceanswer.service.ReferenceAnswerService;
 import com.example.leetcodetrainer.postattempt.service.PostAttemptSummaryService;
+import com.example.leetcodetrainer.implementation.service.ImplementationReliabilityService;
 import java.time.Instant;
 import java.util.List;
 import java.util.OptionalInt;
@@ -49,6 +50,7 @@ class AttemptControllerTest {
     @MockBean private CoachingService coachingService;
     @MockBean private ReferenceAnswerService referenceAnswerService;
     @MockBean private PostAttemptSummaryService postAttemptSummaryService;
+    @MockBean private ImplementationReliabilityService implementationReliabilityService;
     private UUID problemId;
     private UUID attemptId;
     private Attempt attempt;

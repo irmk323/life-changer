@@ -11,6 +11,8 @@ import com.example.leetcodetrainer.failure.domain.FailureSeverity;
 import com.example.leetcodetrainer.coaching.service.CoachingService;
 import com.example.leetcodetrainer.referenceanswer.service.ReferenceAnswerService;
 import com.example.leetcodetrainer.postattempt.service.PostAttemptSummaryService;
+import com.example.leetcodetrainer.implementation.service.ImplementationReliabilityService;
+import com.example.leetcodetrainer.implementation.domain.*;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashSet;
@@ -31,9 +33,10 @@ public class AttemptController {
     private final CoachingService coachingService;
     private final ReferenceAnswerService referenceAnswerService;
     private final PostAttemptSummaryService postAttemptSummaryService;
+    private final ImplementationReliabilityService implementationReliabilityService;
     public AttemptController(AttemptService attemptService, ProblemCatalogService problemCatalogService, PatternCatalogService patternCatalogService,
-                             HintService hintService, ReviewSchedulingService reviewService, FailureLabelService failureLabelService, CoachingService coachingService, ReferenceAnswerService referenceAnswerService, PostAttemptSummaryService postAttemptSummaryService) {
-        this.attemptService = attemptService; this.problemCatalogService = problemCatalogService; this.patternCatalogService = patternCatalogService; this.hintService = hintService; this.reviewService = reviewService; this.failureLabelService = failureLabelService; this.coachingService = coachingService; this.referenceAnswerService=referenceAnswerService; this.postAttemptSummaryService=postAttemptSummaryService;
+                             HintService hintService, ReviewSchedulingService reviewService, FailureLabelService failureLabelService, CoachingService coachingService, ReferenceAnswerService referenceAnswerService, PostAttemptSummaryService postAttemptSummaryService, ImplementationReliabilityService implementationReliabilityService) {
+        this.attemptService = attemptService; this.problemCatalogService = problemCatalogService; this.patternCatalogService = patternCatalogService; this.hintService = hintService; this.reviewService = reviewService; this.failureLabelService = failureLabelService; this.coachingService = coachingService; this.referenceAnswerService=referenceAnswerService; this.postAttemptSummaryService=postAttemptSummaryService; this.implementationReliabilityService=implementationReliabilityService;
     }
     @PostMapping("/problems/{problemId}/attempts")
     public String start(@PathVariable UUID problemId) {
@@ -100,6 +103,8 @@ public class AttemptController {
         catch (IllegalArgumentException | IllegalStateException exception) { attributes.addFlashAttribute("error", exception.getMessage()); }
         return "redirect:/attempts/" + id + "/workspace?stage=IMPLEMENTATION";
     }
+    @PostMapping("/attempts/{id}/implementation/reliability") public String saveReliability(@PathVariable UUID id,@RequestParam ImplementationStatus status,@RequestParam(defaultValue="false") boolean firstPassCompiled,@RequestParam(defaultValue="false") boolean firstPassPassedBasicCases,@RequestParam(defaultValue="false") boolean firstPassPassedEdgeCases,@RequestParam(defaultValue="false") boolean finalImplementationCompleted,@RequestParam(defaultValue="false") boolean selfDetectedError,@RequestParam(defaultValue="false") boolean usedHint,@RequestParam(defaultValue="0") int compileErrorCount,@RequestParam(defaultValue="0") int wrongAnswerCount,@RequestParam(defaultValue="0") int runtimeErrorCount,@RequestParam(defaultValue="0") int timeoutCount,@RequestParam(required=false) String notes,RedirectAttributes a){implementationReliabilityService.save(id,status,firstPassCompiled,firstPassPassedBasicCases,firstPassPassedEdgeCases,finalImplementationCompleted,selfDetectedError,usedHint,compileErrorCount,wrongAnswerCount,runtimeErrorCount,timeoutCount,notes);a.addFlashAttribute("message","実装の再現性を保存しました。");return "redirect:/attempts/"+id+"/workspace?stage=IMPLEMENTATION";}
+    @PostMapping("/attempts/{id}/implementation/errors") public String addImplementationError(@PathVariable UUID id,@RequestParam ImplementationErrorType errorType,@RequestParam ErrorSource errorSource,@RequestParam ErrorSeverity severity,@RequestParam(required=false) String failingInput,@RequestParam(required=false) String expectedOutput,@RequestParam(required=false) String actualOutput,@RequestParam(required=false) String rootCause,@RequestParam(required=false) String correction,@RequestParam(required=false) String preventionRule,RedirectAttributes a){try{implementationReliabilityService.addError(id,errorType,errorSource,severity,failingInput,expectedOutput,actualOutput,rootCause,correction,preventionRule);a.addFlashAttribute("message","実装エラーを記録しました。");}catch(RuntimeException e){a.addFlashAttribute("error",e.getMessage());}return "redirect:/attempts/"+id+"/workspace?stage=IMPLEMENTATION";}
     @PostMapping("/attempts/{id}/reflection")
     public String saveReflection(@PathVariable UUID id, @RequestParam(required = false) String independentStages, @RequestParam(required = false) String hintNeededStages,
                                  @RequestParam(required = false) String unknownStages, @RequestParam(required = false) String triggerSentence,
@@ -151,6 +156,7 @@ public class AttemptController {
         model.addAttribute("stageTypes", StageType.ordered()); model.addAttribute("scores", AssessmentScore.values());
         model.addAttribute("updatedRegions", UpdatedRegion.values()); model.addAttribute("operations", RequiredOperation.values());
         model.addAttribute("dataStructures", DataStructureOption.values()); model.addAttribute("finalResults", FinalResult.values());
+        model.addAttribute("implementationStatuses", ImplementationStatus.values()); model.addAttribute("implementationErrorTypes", ImplementationErrorType.values()); model.addAttribute("errorSources", ErrorSource.values()); model.addAttribute("errorSeverities", ErrorSeverity.values()); model.addAttribute("implementationRecord", implementationReliabilityService.record(attempt.getId())); model.addAttribute("implementationErrors", implementationReliabilityService.errors(attempt.getId()));
         model.addAttribute("hintProgress", hintService.progress(attempt.getId(), current.getStageType()));
         var referenceStatus = referenceAnswerService.status(attempt.getId(), current.getStageType());
         model.addAttribute("referenceAnswerStatus", referenceStatus);
