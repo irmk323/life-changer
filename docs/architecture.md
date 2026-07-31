@@ -23,6 +23,16 @@ hint-assisted, or not yet understood. It therefore treats a same-problem recall,
 an unseen isomorphic transfer, and mixed-pattern discrimination as separate
 outcomes. A solved count is only a secondary descriptive metric.
 
+## Legacy workflow and curriculum-engine boundary
+
+The implemented workflow is a legacy evidence recorder: an Attempt creates all
+13 StageAssessments and reviews follow a fixed sequence. The target curriculum
+engine records exposure before a session, chooses a learning mode and smallest
+diagnostic task, captures the first blocked skill, and schedules the next task
+from valid evidence. Existing Attempts, StageAssessments, HintUsage,
+ReviewSchedules, coaching, and analytics remain readable during an additive
+migration; no legacy migration is rewritten or local data reset.
+
 ## MVP boundary
 
 The MVP provides an end-to-end, local vertical slice for these eight problems:
@@ -160,4 +170,3 @@ with `RuleBasedCoachProvider`; no networked provider is part of the default.
    discrimination.
 4. Coaching describes observed stages and an actionable next test. It never
    infers global ability or medical status.
-

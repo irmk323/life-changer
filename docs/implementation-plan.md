@@ -1,5 +1,13 @@
 # Implementation plan
 
+## Current and target plans
+
+The numbered Phase 2–11 plan describes the implemented prototype. The active
+forward plan is `docs/redesign/`, beginning with R0 documentation/safety and
+then R1–R9. R0 changes no learner workflow, schema, migration, or local
+database. Later redesign phases use additive migrations and retain current
+Attempt/StageAssessment/ReviewSchedule history until parity is proven.
+
 ## Guiding delivery rule
 
 Each phase is a small vertical slice, leaves the application runnable, adds
@@ -110,4 +118,3 @@ do not add title/tag-only catalogue entries merely to reach 150.
 Begin Phase 1: the executable Spring Boot foundation plus the metadata-only
 Problem/Pattern catalogue for the eight MVP problems. This establishes durable
 migrations and the content boundary before attempts introduce learner data.
-

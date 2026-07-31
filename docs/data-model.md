@@ -11,6 +11,14 @@ All entity timestamps are `Instant`; a learner-facing review date is `LocalDate`
 calculated in the configured user time zone. UUID identifiers are recommended
 for exports/imports and simpler future data portability.
 
+## Redesign migration boundary
+
+The current tables are legacy evidence, retained for historical reads. The
+curriculum engine will add exposure, LearningSession, SkillEvidence,
+AssistanceEvent, mastery-projection, and LearningTask tables. A legacy score or
+review must never be silently upgraded to protected-unseen or fine-grained
+mastery evidence without validity rules and retained source IDs.
+
 ## Main entities
 
 ### Catalogue
@@ -207,4 +215,3 @@ site or import copyrighted statement/editorial text.
 # Phase 8 patch compatibility
 
 `StageAssessment.stageType` は保存済みの `UNRESOLVED_STATE` と `UPDATED_REGION` を維持する。画面と教材ではそれぞれ「保持する状態・未確定の候補」「状態の参照・更新対象」と表示する。`UpdatedRegion` は既存値を変更せず、`SEARCH_RANGE` と `NOT_APPLICABLE` を追加するため、過去の assessment と analytics key の変換は不要である。
-

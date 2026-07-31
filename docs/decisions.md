@@ -6,6 +6,9 @@
 | --- | --- |
 | Measure stages, not only outcomes | The product's central claim is cognitive diagnosis and training. Completion without stage evidence cannot establish it. |
 | Keep retention, transfer, and discrimination distinct | Re-solving a known item tests recall; unseen isomorphism tests reuse; mixed tasks test candidate discrimination. Combining them would inflate apparent ability. |
+| Treat the fixed workflow as legacy orchestration | The 13-stage map remains valuable diagnostic vocabulary, but forcing every session through every stage and creating every review type cannot provide adaptive curriculum routing. It remains readable until curriculum-engine parity. |
+| Use additive curriculum migration | New exposure, session, evidence, mastery, and task tables retain links to legacy records. Historical scores/reviews are not silently reclassified as protected-unseen or fine-grained mastery. |
+| Protect unseen evaluation integrity | Transfer/holdout evidence is valid only when authored exposure rules permit it; same-problem recall and revealed content remain separate metrics. |
 | Keep missing stage assessments nullable | A score of zero means the learner tried and could not yet explain or execute the stage. Completion leaves untouched stages `NOT_STARTED` with a null score; Quick Assessment may later record 0, 1, 2, skipped, or not applicable. |
 | Treat legacy synthetic zeroes as ambiguous | Earlier completion logic could create zeroes without an answer, hint, reference-answer reveal, or meaningful duration. V21 preserves those rows and derives `LEGACY_AMBIGUOUS`, suppressing bottlenecks and analytics until the learner reviews them. |
 | Gate bottleneck inference on data quality | Fewer than three assessed stages, half or more unassessed stages, legacy ambiguity, or an independent result with all assessed stages at zero prevents automatic FailureLabel suggestions. This avoids turning absent evidence into a diagnosis. |

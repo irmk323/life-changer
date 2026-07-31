@@ -8,11 +8,17 @@ of solved problems.
 
 ## Current scope
 
-Phase 1 provides the runnable application foundation and a metadata-only,
-eight-problem starter catalogue. It includes a home page, a filterable problem
-library, local persistence, and a status endpoint. Attempts, assessments,
-hints, reviews, coaching, analytics, and import/export are deliberately future
-phases.
+This is a local evidence-recording prototype, not yet the adaptive curriculum
+engine described in `docs/redesign/`. It includes an eight-problem metadata-only
+catalogue, 13-stage Attempts, nullable stage assessments, progressive hints,
+reference-answer reveal history, reviews, FailureLabels, rule-based coaching,
+post-attempt summaries, weekly focus, analytics, and an initial
+implementation-error recording scaffold.
+
+The fixed 13-stage workflow and automatic review sequence are legacy behaviour
+scheduled for replacement. NeetCode 150 metadata, protected holdouts, adaptive
+sessions, mastery projections, task selection, complete implementation repair,
+and import/export are not implemented yet.
 
 The application stores problem names, slugs, difficulty, category, external
 links, and app-authored pattern metadata. It does not scrape or copy LeetCode
