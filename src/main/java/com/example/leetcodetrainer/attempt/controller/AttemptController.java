@@ -13,6 +13,8 @@ import com.example.leetcodetrainer.referenceanswer.service.ReferenceAnswerServic
 import com.example.leetcodetrainer.postattempt.service.PostAttemptSummaryService;
 import com.example.leetcodetrainer.implementation.service.ImplementationReliabilityService;
 import com.example.leetcodetrainer.implementation.domain.*;
+import com.example.leetcodetrainer.adaptive.service.AdaptiveLearningService;
+import com.example.leetcodetrainer.adaptive.service.ReasoningProfileService;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashSet;
@@ -33,10 +35,10 @@ public class AttemptController {
     private final CoachingService coachingService;
     private final ReferenceAnswerService referenceAnswerService;
     private final PostAttemptSummaryService postAttemptSummaryService;
-    private final ImplementationReliabilityService implementationReliabilityService;
+    private final ImplementationReliabilityService implementationReliabilityService; private final AdaptiveLearningService adaptiveLearningService; private final ReasoningProfileService reasoningProfileService;
     public AttemptController(AttemptService attemptService, ProblemCatalogService problemCatalogService, PatternCatalogService patternCatalogService,
-                             HintService hintService, ReviewSchedulingService reviewService, FailureLabelService failureLabelService, CoachingService coachingService, ReferenceAnswerService referenceAnswerService, PostAttemptSummaryService postAttemptSummaryService, ImplementationReliabilityService implementationReliabilityService) {
-        this.attemptService = attemptService; this.problemCatalogService = problemCatalogService; this.patternCatalogService = patternCatalogService; this.hintService = hintService; this.reviewService = reviewService; this.failureLabelService = failureLabelService; this.coachingService = coachingService; this.referenceAnswerService=referenceAnswerService; this.postAttemptSummaryService=postAttemptSummaryService; this.implementationReliabilityService=implementationReliabilityService;
+                             HintService hintService, ReviewSchedulingService reviewService, FailureLabelService failureLabelService, CoachingService coachingService, ReferenceAnswerService referenceAnswerService, PostAttemptSummaryService postAttemptSummaryService, ImplementationReliabilityService implementationReliabilityService, AdaptiveLearningService adaptiveLearningService, ReasoningProfileService reasoningProfileService) {
+        this.attemptService = attemptService; this.problemCatalogService = problemCatalogService; this.patternCatalogService = patternCatalogService; this.hintService = hintService; this.reviewService = reviewService; this.failureLabelService = failureLabelService; this.coachingService = coachingService; this.referenceAnswerService=referenceAnswerService; this.postAttemptSummaryService=postAttemptSummaryService; this.implementationReliabilityService=implementationReliabilityService;this.adaptiveLearningService=adaptiveLearningService;this.reasoningProfileService=reasoningProfileService;
     }
     @PostMapping("/problems/{problemId}/attempts")
     public String start(@PathVariable UUID problemId) {
@@ -133,6 +135,7 @@ public class AttemptController {
         Attempt attempt = attemptService.get(id);
         if (attempt.getStatus() == AttemptStatus.IN_PROGRESS) return "redirect:/attempts/" + id + "/workspace";
         model.addAttribute("attempt", attempt); model.addAttribute("problem", problemCatalogService.getProblem(attempt.getProblemId()));
+        adaptiveLearningService.taskForAttempt(attempt.getId()).ifPresent(task -> { model.addAttribute("learningTask", task); model.addAttribute("profileStages", reasoningProfileService.stagesFor(task.getProfile())); });
         model.addAttribute("attemptHistory", attemptService.historyForProblem(attempt.getProblemId()).stream()
                 .filter(previous -> !previous.getId().equals(attempt.getId())).toList());
         model.addAttribute("stages", attemptService.stages(id)); model.addAttribute("hintUsages", hintService.usagesForAttempt(id)); model.addAttribute("referenceReveals", referenceAnswerService.revealsForAttempt(id)); model.addAttribute("summary", postAttemptSummaryService.summary(attempt));

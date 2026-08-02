@@ -16,6 +16,8 @@ public class StageAssessment {
     @Lob private String answer;
     private Integer score;
     @Enumerated(EnumType.STRING) @Column(nullable = false) private StageAssessmentStatus assessmentStatus = StageAssessmentStatus.NOT_STARTED;
+    @Enumerated(EnumType.STRING) private StageOutcome stageOutcome;
+    @Enumerated(EnumType.STRING) private AssistanceSource assistanceSource;
     private Long durationSeconds;
     private Instant startedAt; private Instant completedAt;
     @Lob private String evaluatorNotes;
@@ -48,14 +50,16 @@ public class StageAssessment {
     private void complete(Integer rawScore, Instant now) {
         AssessmentScore assessmentScore = AssessmentScore.fromValue(rawScore);
         validateSpecificInputs(assessmentScore);
-        score = assessmentScore.getValue(); assessmentStatus = StageAssessmentStatus.ASSESSED; completedAt = now;
+        score = assessmentScore.getValue(); assessmentStatus = StageAssessmentStatus.ASSESSED;
+        stageOutcome = switch (assessmentScore) { case INDEPENDENT -> StageOutcome.INDEPENDENT; case WITH_SUPPORT -> StageOutcome.PARTIAL; case NOT_ABLE -> StageOutcome.BLOCKED; };
+        assistanceSource = assessmentScore == AssessmentScore.WITH_SUPPORT ? AssistanceSource.USER_MARKED_PARTIAL : AssistanceSource.NONE; completedAt = now;
         if (startedAt == null) startedAt = now;
         durationSeconds = Math.max(0, Duration.between(startedAt, now).getSeconds()); updatedAt = now;
     }
     public void setAssessmentStatus(StageAssessmentStatus status, Integer score, Instant now) {
         if (status == StageAssessmentStatus.ASSESSED) { if (score == null) throw new IllegalArgumentException("評価済みには0〜2点が必要です。"); complete(score, now); return; }
         if (score != null) throw new IllegalArgumentException("未評価・スキップ・対象外には点数を設定できません。");
-        assessmentStatus = status; this.score = null; completedAt = null; durationSeconds = null; updatedAt = now;
+        assessmentStatus = status; this.score = null; stageOutcome = status == StageAssessmentStatus.NOT_APPLICABLE ? StageOutcome.NOT_APPLICABLE : status == StageAssessmentStatus.SKIPPED ? StageOutcome.SKIPPED : StageOutcome.UNASSESSED; assistanceSource = AssistanceSource.NONE; completedAt = null; durationSeconds = null; updatedAt = now;
     }
     private void validateSpecificInputs(AssessmentScore assessmentScore) {
         if (assessmentScore == AssessmentScore.NOT_ABLE) return;
@@ -73,4 +77,7 @@ public class StageAssessment {
     public String getTimeComplexity() { return timeComplexity; } public String getSpaceComplexity() { return spaceComplexity; } public String getTrace() { return trace; }
     public UpdatedRegion getUpdatedRegion() { return updatedRegion; } public DataStructureOption getDataStructure() { return dataStructure; }
     public String getSelectionReason() { return selectionReason; } public Set<RequiredOperation> getRequiredOperations() { return Set.copyOf(requiredOperations); }
+    public StageOutcome getStageOutcome() { return stageOutcome == null ? derivedOutcome() : stageOutcome; }
+    public AssistanceSource getAssistanceSource() { return assistanceSource == null ? AssistanceSource.UNKNOWN_LEGACY : assistanceSource; }
+    private StageOutcome derivedOutcome() { if (assessmentStatus == StageAssessmentStatus.NOT_APPLICABLE) return StageOutcome.NOT_APPLICABLE; if (assessmentStatus == StageAssessmentStatus.SKIPPED) return StageOutcome.SKIPPED; if (assessmentStatus != StageAssessmentStatus.ASSESSED || score == null) return StageOutcome.UNASSESSED; return score == 2 ? StageOutcome.INDEPENDENT : score == 1 ? StageOutcome.PARTIAL : StageOutcome.BLOCKED; }
 }

@@ -1,0 +1,11 @@
+package com.example.leetcodetrainer.adaptive.service;
+import com.example.leetcodetrainer.adaptive.domain.*; import com.example.leetcodetrainer.adaptive.repository.*; import com.example.leetcodetrainer.attempt.domain.*; import com.example.leetcodetrainer.attempt.service.AttemptService; import com.example.leetcodetrainer.problem.repository.ProblemRepository; import java.time.Instant; import java.util.*; import org.springframework.stereotype.Service; import org.springframework.transaction.annotation.Transactional;
+@Service @Transactional public class AdaptiveLearningService implements NextTaskSelector {
+ private final LearningTaskTemplateRepository tasks; private final LearningTaskAttemptRepository taskAttempts; private final ProblemRepository problems; private final AttemptService attempts;
+ public AdaptiveLearningService(LearningTaskTemplateRepository t,LearningTaskAttemptRepository a,ProblemRepository p,AttemptService s){tasks=t;taskAttempts=a;problems=p;attempts=s;}
+ public LearningTaskAttempt start(String code,UUID source){var task=tasks.findByCodeAndActiveTrue(code).orElseThrow(()->new IllegalArgumentException("学習課題が見つかりません。"));if(source!=null){var open=taskAttempts.findFirstByTaskTemplateIdAndSourceAttemptIdAndStatus(task.getId(),source,LearningTaskAttemptStatus.IN_PROGRESS);if(open.isPresent())return open.get();}var problem=problems.findBySlug(task.getSourceProblemSlug()).orElseThrow();var attempt=attempts.start(problem.getId(),AttemptType.CURRICULUM_TASK);return taskAttempts.save(new LearningTaskAttempt(UUID.randomUUID(),task.getId(),attempt.getId(),source,null,Instant.now()));}
+ @Transactional(readOnly=true) public LearningTaskAttempt taskAttempt(UUID id){return taskAttempts.findById(id).orElseThrow(()->new IllegalArgumentException("課題記録が見つかりません。"));}
+ @Transactional(readOnly=true) public Optional<LearningTaskTemplate> taskForAttempt(UUID id){return taskAttempts.findByAttemptId(id).flatMap(a->tasks.findById(a.getTaskTemplateId()));}
+ public AttemptLearningEvidence evidenceFor(Attempt a){return new AttemptLearningEvidence(a.getId(),"",ReasoningProfileType.GENERIC,a.getPriorExposure(),a.getFinalResult(),Map.of(),false,false,false);}
+ public Optional<NextLearningTask> select(AttemptLearningEvidence e){return Optional.empty();}
+}
