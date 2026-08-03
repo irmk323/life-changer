@@ -41,4 +41,18 @@ class FailureLabelServiceIntegrationTest {
         failureService.createBottleneckReview(attempt.getId(), suggested.getFailureLabel().getId());
         assertThat(reviews.findAll()).anyMatch(review -> suggested.getFailureLabel().getId().equals(review.getFailureLabelId()));
     }
+
+    @Test
+    void doesNotGenerateFailureLabelForNotApplicableRecursiveStages() {
+        var maximumDepth = problems.findById(java.util.UUID.fromString("20000000-0000-0000-0000-000000000007")).orElseThrow();
+        Attempt attempt = attemptService.start(maximumDepth.getId(), AttemptType.INITIAL);
+        attemptService.saveStage(attempt.getId(), StageType.PROBLEM_RELATION, new StageSaveCommand("contract", 0, null, null, null, null, null, null, Set.of()));
+        attemptService.saveStage(attempt.getId(), StageType.UNRESOLVED_STATE, new StageSaveCommand("children", 0, null, null, null, null, null, null, Set.of()));
+        attemptService.saveStage(attempt.getId(), StageType.INVARIANT, new StageSaveCommand("depth", 0, null, null, null, null, null, null, Set.of()));
+        attemptService.complete(attempt.getId(), FinalResult.NOT_SOLVED);
+
+        assertThat(failureService.analysis(attempt.getId()).suggestions())
+                .noneMatch(s -> s.label().getCode() == FailureLabelCode.REPEATED_WORK_IDENTIFICATION
+                        || s.label().getCode() == FailureLabelCode.DATA_STRUCTURE_SELECTION);
+    }
 }

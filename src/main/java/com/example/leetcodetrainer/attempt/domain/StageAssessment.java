@@ -37,7 +37,7 @@ public class StageAssessment {
     public void markStarted(Instant now) { if (startedAt == null) { startedAt = now; assessmentStatus = StageAssessmentStatus.IN_PROGRESS; updatedAt = now; } }
     /** Completion must never turn an unvisited stage into a failed assessment. */
     public void markSkipped(Instant now) {
-        if (score != null) return;
+        if (score != null || assessmentStatus == StageAssessmentStatus.NOT_APPLICABLE) return;
         assessmentStatus = StageAssessmentStatus.NOT_STARTED;
         updatedAt = now;
     }

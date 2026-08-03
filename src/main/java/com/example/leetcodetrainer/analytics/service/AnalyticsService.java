@@ -95,11 +95,27 @@ public class AnalyticsService {
     }
     private boolean successfulTransfer(Attempt attempt, Map<StageKey, Integer> maxHints) { return successfulResult(attempt) && maxHints.entrySet().stream().filter(entry -> entry.getKey().attemptId.equals(attempt.getId())).mapToInt(Map.Entry::getValue).max().orElse(0) <= 2; }
     private boolean successfulResult(Attempt attempt) { return attempt.getFinalResult() == FinalResult.SOLVED_INDEPENDENTLY || attempt.getFinalResult() == FinalResult.SOLVED_WITH_HINT || attempt.getFinalResult() == FinalResult.PARTIALLY_SOLVED; }
-    private boolean hasAllScoredStages(Attempt attempt, List<StageType> core, Map<UUID, Map<StageType, StageAssessment>> data) { return core.stream().allMatch(stage -> Optional.ofNullable(data.getOrDefault(attempt.getId(), Map.of()).get(stage)).filter(value -> value.getAssessmentStatus() == StageAssessmentStatus.ASSESSED).map(StageAssessment::getScore).isPresent()); }
-    private boolean allAtLeast(Attempt attempt, List<StageType> core, Map<UUID, Map<StageType, StageAssessment>> data, int score) { return core.stream().allMatch(stage -> data.get(attempt.getId()).get(stage).getScore() >= score); }
+    /**
+     * A profile can explicitly exclude a legacy stage.  That is not missing
+     * evidence, so it must neither disqualify an attempt nor be treated as a
+     * zero in retention/transfer aggregates.
+     */
+    private boolean hasAllScoredStages(Attempt attempt, List<StageType> core, Map<UUID, Map<StageType, StageAssessment>> data) {
+        List<StageAssessment> applicable = applicableCore(attempt, core, data);
+        return !applicable.isEmpty() && applicable.stream()
+                .allMatch(value -> value.getAssessmentStatus() == StageAssessmentStatus.ASSESSED && value.getScore() != null);
+    }
+    private boolean allAtLeast(Attempt attempt, List<StageType> core, Map<UUID, Map<StageType, StageAssessment>> data, int score) {
+        return applicableCore(attempt, core, data).stream().allMatch(value -> value.getScore() >= score);
+    }
+    private List<StageAssessment> applicableCore(Attempt attempt, List<StageType> core, Map<UUID, Map<StageType, StageAssessment>> data) {
+        Map<StageType, StageAssessment> byStage = data.getOrDefault(attempt.getId(), Map.of());
+        return core.stream().map(byStage::get).filter(Objects::nonNull)
+                .filter(value -> value.getAssessmentStatus() != StageAssessmentStatus.NOT_APPLICABLE).toList();
+    }
     private Metric classificationMetric(List<Attempt> values, Map<UUID, Map<StageType, StageAssessment>> data) {
         List<StageAssessment> answers = values.stream().filter(a -> a.getAttemptType() == AttemptType.CONTRAST_CLASSIFICATION || a.getAttemptType() == AttemptType.MIXED_CLASSIFICATION)
-                .map(a -> data.getOrDefault(a.getId(), Map.of()).get(StageType.TRANSFER)).filter(Objects::nonNull).filter(a -> a.getScore() != null).toList();
+                .map(a -> data.getOrDefault(a.getId(), Map.of()).get(StageType.TRANSFER)).filter(Objects::nonNull).filter(a -> a.getAssessmentStatus() != StageAssessmentStatus.NOT_APPLICABLE).filter(a -> a.getScore() != null).toList();
         long independent = answers.stream().filter(a -> a.getScore() == 2 && a.getAnswer() != null && !a.getAnswer().isBlank()).count();
         long assisted = answers.stream().filter(a -> a.getScore() >= 1 && a.getAnswer() != null && !a.getAnswer().isBlank()).count();
         return new Metric(independent, assisted, answers.size());
@@ -118,7 +134,7 @@ public class AnalyticsService {
     private AnalyticsSnapshot.ReviewImprovement improvement(ReviewSchedule review, Map<UUID, Map<StageType, StageAssessment>> data, Map<StageKey, Integer> maxHints) {
         Map<StageType, StageAssessment> source = data.get(review.getSourceAttemptId()); Map<StageType, StageAssessment> target = data.get(review.getCompletionAttemptId());
         if (source == null || target == null) return null;
-        List<StageType> common = source.keySet().stream().filter(target::containsKey).filter(stage -> source.get(stage).getScore() != null && target.get(stage).getScore() != null).toList();
+        List<StageType> common = source.keySet().stream().filter(target::containsKey).filter(stage -> source.get(stage).getAssessmentStatus()!=StageAssessmentStatus.NOT_APPLICABLE && target.get(stage).getAssessmentStatus()!=StageAssessmentStatus.NOT_APPLICABLE).filter(stage -> source.get(stage).getScore() != null && target.get(stage).getScore() != null).toList();
         if (common.isEmpty()) return null;
         int score = (int) Math.round(common.stream().mapToInt(stage -> target.get(stage).getScore() - source.get(stage).getScore()).average().orElse(0));
         int hints = (int) Math.round(common.stream().mapToInt(stage -> maxHints.getOrDefault(new StageKey(target.get(stage).getAttemptId(), stage), 0) - maxHints.getOrDefault(new StageKey(source.get(stage).getAttemptId(), stage), 0)).average().orElse(0));

@@ -15,6 +15,7 @@ import com.example.leetcodetrainer.implementation.service.ImplementationReliabil
 import com.example.leetcodetrainer.implementation.domain.*;
 import com.example.leetcodetrainer.adaptive.service.AdaptiveLearningService;
 import com.example.leetcodetrainer.adaptive.service.ReasoningProfileService;
+import com.example.leetcodetrainer.adaptive.service.AttemptRecursiveContractService;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.LinkedHashSet;
@@ -35,11 +36,12 @@ public class AttemptController {
     private final CoachingService coachingService;
     private final ReferenceAnswerService referenceAnswerService;
     private final PostAttemptSummaryService postAttemptSummaryService;
-    private final ImplementationReliabilityService implementationReliabilityService; private final AdaptiveLearningService adaptiveLearningService; private final ReasoningProfileService reasoningProfileService;
+    private final ImplementationReliabilityService implementationReliabilityService; private final AdaptiveLearningService adaptiveLearningService; private final ReasoningProfileService reasoningProfileService; private final AttemptRecursiveContractService recursiveContracts;
     public AttemptController(AttemptService attemptService, ProblemCatalogService problemCatalogService, PatternCatalogService patternCatalogService,
-                             HintService hintService, ReviewSchedulingService reviewService, FailureLabelService failureLabelService, CoachingService coachingService, ReferenceAnswerService referenceAnswerService, PostAttemptSummaryService postAttemptSummaryService, ImplementationReliabilityService implementationReliabilityService, AdaptiveLearningService adaptiveLearningService, ReasoningProfileService reasoningProfileService) {
-        this.attemptService = attemptService; this.problemCatalogService = problemCatalogService; this.patternCatalogService = patternCatalogService; this.hintService = hintService; this.reviewService = reviewService; this.failureLabelService = failureLabelService; this.coachingService = coachingService; this.referenceAnswerService=referenceAnswerService; this.postAttemptSummaryService=postAttemptSummaryService; this.implementationReliabilityService=implementationReliabilityService;this.adaptiveLearningService=adaptiveLearningService;this.reasoningProfileService=reasoningProfileService;
+                             HintService hintService, ReviewSchedulingService reviewService, FailureLabelService failureLabelService, CoachingService coachingService, ReferenceAnswerService referenceAnswerService, PostAttemptSummaryService postAttemptSummaryService, ImplementationReliabilityService implementationReliabilityService, AdaptiveLearningService adaptiveLearningService, ReasoningProfileService reasoningProfileService, AttemptRecursiveContractService recursiveContracts) {
+        this.attemptService = attemptService; this.problemCatalogService = problemCatalogService; this.patternCatalogService = patternCatalogService; this.hintService = hintService; this.reviewService = reviewService; this.failureLabelService = failureLabelService; this.coachingService = coachingService; this.referenceAnswerService=referenceAnswerService; this.postAttemptSummaryService=postAttemptSummaryService; this.implementationReliabilityService=implementationReliabilityService;this.adaptiveLearningService=adaptiveLearningService;this.reasoningProfileService=reasoningProfileService;this.recursiveContracts=recursiveContracts;
     }
+    @PostMapping("/attempts/{id}/recursive-contract") public String saveRecursiveContract(@PathVariable UUID id,@RequestParam(required=false) String functionContract,@RequestParam(required=false) String baseCase,@RequestParam(required=false) String subproblems,@RequestParam(required=false) String compositionRule,RedirectAttributes attributes){try{recursiveContracts.save(id,functionContract,baseCase,subproblems,compositionRule);attributes.addFlashAttribute("message","Four-line Contractを保存しました。");}catch(RuntimeException e){attributes.addFlashAttribute("error",e.getMessage());}return "redirect:/attempts/"+id+"/workspace?stage=PROBLEM_RELATION";}
     @PostMapping("/problems/{problemId}/attempts")
     public String start(@PathVariable UUID problemId) {
         problemCatalogService.getProblem(problemId);
@@ -49,8 +51,12 @@ public class AttemptController {
     public String workspace(@PathVariable UUID id, @RequestParam(required = false) StageType stage, Model model) {
         Attempt attempt = attemptService.get(id);
         if (attempt.getStatus() != AttemptStatus.IN_PROGRESS) return "redirect:/attempts/" + id;
+        var problem=problemCatalogService.getProblem(attempt.getProblemId());
+        var required=reasoningProfileService.stagesFor(reasoningProfileService.profileForSlug(problem.getSlug())).stream().filter(value -> value.applicability()==com.example.leetcodetrainer.adaptive.domain.StageApplicability.REQUIRED).map(com.example.leetcodetrainer.adaptive.domain.ProfileStageDefinition::canonicalStage).toList();
+        if (stage != null && !required.contains(stage)) return "redirect:/attempts/" + id + "/workspace";
         if (stage != null) attemptService.moveTo(id, stage);
         StageAssessment current = attemptService.currentStage(id);
+        if (!required.contains(current.getStageType())) { attemptService.moveTo(id, required.getFirst()); current=attemptService.currentStage(id); }
         populateWorkspace(model, attemptService.get(id), current);
         return "attempts/workspace";
     }
@@ -134,7 +140,12 @@ public class AttemptController {
     public String completed(@PathVariable UUID id, Model model) {
         Attempt attempt = attemptService.get(id);
         if (attempt.getStatus() == AttemptStatus.IN_PROGRESS) return "redirect:/attempts/" + id + "/workspace";
-        model.addAttribute("attempt", attempt); model.addAttribute("problem", problemCatalogService.getProblem(attempt.getProblemId()));
+        var problem=problemCatalogService.getProblem(attempt.getProblemId());
+        model.addAttribute("attempt", attempt); model.addAttribute("problem", problem);
+        var profileStages=reasoningProfileService.stagesFor(reasoningProfileService.profileForSlug(problem.getSlug()));
+        var workflowStages=profileStages.stream().filter(value -> value.applicability()==com.example.leetcodetrainer.adaptive.domain.StageApplicability.REQUIRED).map(com.example.leetcodetrainer.adaptive.domain.ProfileStageDefinition::canonicalStage).toList();
+        model.addAttribute("workflowStages", workflowStages);
+        model.addAttribute("optionalProfileStages", profileStages.stream().filter(value -> value.applicability()==com.example.leetcodetrainer.adaptive.domain.StageApplicability.OPTIONAL).toList());
         adaptiveLearningService.taskForAttempt(attempt.getId()).ifPresent(task -> { model.addAttribute("learningTask", task); model.addAttribute("profileStages", reasoningProfileService.stagesFor(task.getProfile())); });
         model.addAttribute("attemptHistory", attemptService.historyForProblem(attempt.getProblemId()).stream()
                 .filter(previous -> !previous.getId().equals(attempt.getId())).toList());
@@ -154,9 +165,17 @@ public class AttemptController {
     public String bottleneckReview(@PathVariable UUID id, @RequestParam UUID labelId, RedirectAttributes attributes) { try { return "redirect:/reviews/"+failureLabelService.createBottleneckReview(id,labelId); } catch (RuntimeException exception) { attributes.addFlashAttribute("error",exception.getMessage()); return "redirect:/attempts/"+id; } }
     @PostMapping("/attempts/{id}/coaching/regenerate") public String regenerateCoaching(@PathVariable UUID id) { coachingService.generate(id); return "redirect:/attempts/"+id; }
     private void populateWorkspace(Model model, Attempt attempt, StageAssessment current) {
-        model.addAttribute("attempt", attempt); model.addAttribute("problem", problemCatalogService.getProblem(attempt.getProblemId()));
+        var problem=problemCatalogService.getProblem(attempt.getProblemId());
+        model.addAttribute("attempt", attempt); model.addAttribute("problem", problem);
+        var profileStages=reasoningProfileService.stagesFor(reasoningProfileService.profileForSlug(problem.getSlug()));
+        var workflowStages=profileStages.stream().filter(value -> value.applicability()==com.example.leetcodetrainer.adaptive.domain.StageApplicability.REQUIRED).map(com.example.leetcodetrainer.adaptive.domain.ProfileStageDefinition::canonicalStage).toList();
+        int workflowIndex=workflowStages.indexOf(current.getStageType());
+        var currentProfileStage=profileStages.stream().filter(value -> value.canonicalStage()==current.getStageType()).findFirst().orElseThrow();
+        model.addAttribute("workflowStages",workflowStages); model.addAttribute("requiredProfileStages",profileStages.stream().filter(value -> value.applicability()==com.example.leetcodetrainer.adaptive.domain.StageApplicability.REQUIRED).toList()); model.addAttribute("workflowPosition",workflowIndex+1); model.addAttribute("workflowSize",workflowStages.size()); model.addAttribute("currentProfileStage",currentProfileStage); model.addAttribute("previousWorkflowStage",workflowIndex>0?workflowStages.get(workflowIndex-1):null); model.addAttribute("nextWorkflowStage",workflowIndex>=0&&workflowIndex<workflowStages.size()-1?workflowStages.get(workflowIndex+1):null);
+        model.addAttribute("optionalProfileStages",profileStages.stream().filter(value -> value.applicability()==com.example.leetcodetrainer.adaptive.domain.StageApplicability.OPTIONAL).toList());
         model.addAttribute("current", current); model.addAttribute("stages", attemptService.stages(attempt.getId()));
-        model.addAttribute("stageTypes", StageType.ordered()); model.addAttribute("scores", AssessmentScore.values());
+        recursiveContracts.find(attempt.getId()).ifPresent(contract -> model.addAttribute("recursiveContract",contract));
+        model.addAttribute("stageTypes", workflowStages); model.addAttribute("scores", AssessmentScore.values());
         model.addAttribute("updatedRegions", UpdatedRegion.values()); model.addAttribute("operations", RequiredOperation.values());
         model.addAttribute("dataStructures", DataStructureOption.values()); model.addAttribute("finalResults", FinalResult.values());
         model.addAttribute("implementationStatuses", ImplementationStatus.values()); model.addAttribute("implementationErrorTypes", ImplementationErrorType.values()); model.addAttribute("errorSources", ErrorSource.values()); model.addAttribute("errorSeverities", ErrorSeverity.values()); model.addAttribute("implementationRecord", implementationReliabilityService.record(attempt.getId())); model.addAttribute("implementationErrors", implementationReliabilityService.errors(attempt.getId()));

@@ -6,6 +6,9 @@ import com.example.leetcodetrainer.attempt.repository.StageAssessmentRepository;
 import com.example.leetcodetrainer.hint.service.HintService;
 import com.example.leetcodetrainer.referenceanswer.service.ReferenceAnswerService;
 import com.example.leetcodetrainer.shared.domain.ResourceNotFoundException;
+import com.example.leetcodetrainer.problem.repository.ProblemRepository;
+import com.example.leetcodetrainer.adaptive.service.ReasoningProfileService;
+import com.example.leetcodetrainer.adaptive.domain.StageApplicability;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Comparator;
@@ -26,10 +29,12 @@ public class AttemptService {
     private final ReferenceAnswerService referenceAnswerService;
     private final AttemptQualityService qualityService;
     private final ApplicationEventPublisher eventPublisher;
+    private final ProblemRepository problems;
+    private final ReasoningProfileService profiles;
 
     public AttemptService(AttemptRepository attemptRepository, StageAssessmentRepository stageAssessmentRepository, Clock clock,
-                          HintService hintService, ReferenceAnswerService referenceAnswerService, AttemptQualityService qualityService, ApplicationEventPublisher eventPublisher) {
-        this.attemptRepository = attemptRepository; this.stageAssessmentRepository = stageAssessmentRepository; this.clock = clock; this.hintService = hintService; this.referenceAnswerService = referenceAnswerService; this.qualityService = qualityService; this.eventPublisher = eventPublisher;
+                          HintService hintService, ReferenceAnswerService referenceAnswerService, AttemptQualityService qualityService, ApplicationEventPublisher eventPublisher, ProblemRepository problems, ReasoningProfileService profiles) {
+        this.attemptRepository = attemptRepository; this.stageAssessmentRepository = stageAssessmentRepository; this.clock = clock; this.hintService = hintService; this.referenceAnswerService = referenceAnswerService; this.qualityService = qualityService; this.eventPublisher = eventPublisher; this.problems=problems; this.profiles=profiles;
     }
     public Attempt start(UUID problemId, AttemptType type) {
         return start(problemId, type, null);
@@ -41,8 +46,9 @@ public class AttemptService {
     public Attempt start(UUID problemId, AttemptType type, UUID sourceReviewScheduleId) {
         Instant now = Instant.now(clock);
         Attempt attempt = attemptRepository.save(new Attempt(UUID.randomUUID(), problemId, type, sourceReviewScheduleId, now));
-        stageAssessmentRepository.saveAll(StageType.ordered().stream()
-                .map(stage -> new StageAssessment(UUID.randomUUID(), attempt.getId(), stage, now)).toList());
+        var profile = profiles.stagesFor(profiles.profileForSlug(problems.findById(problemId).orElseThrow(() -> new ResourceNotFoundException("Problem not found: " + problemId)).getSlug()));
+        var excluded=profile.stream().filter(s -> s.applicability()==StageApplicability.NOT_APPLICABLE).map(s -> s.canonicalStage()).collect(java.util.stream.Collectors.toSet());
+        stageAssessmentRepository.saveAll(StageType.ordered().stream().map(stage -> { var assessment=new StageAssessment(UUID.randomUUID(), attempt.getId(), stage, now); if(excluded.contains(stage)) assessment.setAssessmentStatus(StageAssessmentStatus.NOT_APPLICABLE,null,now); return assessment; }).toList());
         return attempt;
     }
     @Transactional(readOnly = true)

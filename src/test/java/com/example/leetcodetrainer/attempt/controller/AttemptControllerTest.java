@@ -7,6 +7,7 @@ import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.model;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
@@ -28,6 +29,16 @@ import com.example.leetcodetrainer.postattempt.service.PostAttemptSummaryService
 import com.example.leetcodetrainer.implementation.service.ImplementationReliabilityService;
 import com.example.leetcodetrainer.adaptive.service.AdaptiveLearningService;
 import com.example.leetcodetrainer.adaptive.service.ReasoningProfileService;
+import com.example.leetcodetrainer.adaptive.service.AttemptRecursiveContractService;
+import com.example.leetcodetrainer.adaptive.domain.LearningTaskCard;
+import com.example.leetcodetrainer.adaptive.domain.LearningTaskAttemptStatus;
+import com.example.leetcodetrainer.adaptive.domain.LearningTaskType;
+import com.example.leetcodetrainer.adaptive.domain.NextLearningTask;
+import com.example.leetcodetrainer.attempt.service.AttemptQuality;
+import com.example.leetcodetrainer.attempt.domain.AttemptAnalysisStatus;
+import com.example.leetcodetrainer.attempt.domain.AttemptDataQualityStatus;
+import com.example.leetcodetrainer.failure.dto.BottleneckAnalysis;
+import com.example.leetcodetrainer.postattempt.service.PostAttemptSummary;
 import java.time.Instant;
 import java.util.List;
 import java.util.OptionalInt;
@@ -55,6 +66,7 @@ class AttemptControllerTest {
     @MockBean private ImplementationReliabilityService implementationReliabilityService;
     @MockBean private AdaptiveLearningService adaptiveLearningService;
     @MockBean private ReasoningProfileService reasoningProfileService;
+    @MockBean private AttemptRecursiveContractService recursiveContracts;
     private UUID problemId;
     private UUID attemptId;
     private Attempt attempt;
@@ -71,6 +83,12 @@ class AttemptControllerTest {
         when(hintService.progress(eq(attemptId), any(StageType.class))).thenReturn(new HintProgress(List.of(), OptionalInt.of(1)));
         when(referenceAnswerService.status(eq(attemptId), any(StageType.class))).thenReturn(new com.example.leetcodetrainer.referenceanswer.service.ReferenceAnswerStatus(true, false, 1));
         when(referenceAnswerService.revealedAnswer(eq(attemptId), any(StageType.class))).thenReturn(Optional.empty());
+        var profileService = new com.example.leetcodetrainer.adaptive.service.ReasoningProfileService();
+        when(reasoningProfileService.profileForSlug("two-sum")).thenReturn(com.example.leetcodetrainer.adaptive.domain.ReasoningProfileType.LOOKUP_STATE);
+        when(reasoningProfileService.stagesFor(com.example.leetcodetrainer.adaptive.domain.ReasoningProfileType.LOOKUP_STATE)).thenReturn(profileService.stagesFor(com.example.leetcodetrainer.adaptive.domain.ReasoningProfileType.LOOKUP_STATE));
+        when(attemptService.historyForProblem(problemId)).thenReturn(List.of());
+        when(adaptiveLearningService.taskForAttempt(attemptId)).thenReturn(Optional.empty());
+        when(recursiveContracts.find(attemptId)).thenReturn(Optional.empty());
     }
 
     @Test
@@ -96,5 +114,50 @@ class AttemptControllerTest {
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/attempts/" + attemptId + "/workspace?stage=PROBLEM_RELATION"));
         verify(hintService).revealNext(attemptId, StageType.PROBLEM_RELATION);
+    }
+
+    @Test
+    void rendersPostAttemptTaskCardAcrossNotStartedInProgressCompletedAndNextTaskStates() throws Exception {
+        attempt.complete(FinalResult.NOT_SOLVED, Instant.now());
+        NextLearningTask first = new NextLearningTask("two-sum-relation-first", LearningTaskType.MICRO_SKILL_DRILL,
+                "Two Sum — Relation First", "関係を式へ変換する練習です。", "i != j", java.util.Set.of());
+        NextLearningTask next = new NextLearningTask("movie-ticket-pair", LearningTaskType.ISOMORPHIC_TRANSFER,
+                "Movie Ticket Pair", "別表現へ転用します。", "関係を説明する", java.util.Set.of());
+
+        when(postAttemptSummaryService.summary(attempt)).thenReturn(summary(new LearningTaskCard(first, LearningTaskAttemptStatus.NOT_STARTED, null)));
+        mvc.perform(get("/attempts/{id}", attemptId)).andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("この課題を始める")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("/learning-tasks/two-sum-relation-first/start")));
+
+        UUID taskAttemptId = UUID.randomUUID();
+        when(postAttemptSummaryService.summary(attempt)).thenReturn(summary(new LearningTaskCard(first, LearningTaskAttemptStatus.IN_PROGRESS, taskAttemptId)));
+        mvc.perform(get("/attempts/{id}", attemptId)).andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("続きから再開")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("/learning-task-attempts/" + taskAttemptId + "/workspace")));
+
+        when(postAttemptSummaryService.summary(attempt)).thenReturn(summary(new LearningTaskCard(first, LearningTaskAttemptStatus.COMPLETED, taskAttemptId)));
+        mvc.perform(get("/attempts/{id}", attemptId)).andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("結果を見る")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("もう一度試す")));
+
+        when(postAttemptSummaryService.summary(attempt)).thenReturn(summary(new LearningTaskCard(next, LearningTaskAttemptStatus.NOT_STARTED, null)));
+        mvc.perform(get("/attempts/{id}", attemptId)).andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Movie Ticket Pair")))
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("Two Sum — Relation First"))));
+    }
+
+    @Test
+    void doesNotRenderLearningTaskCardWhenPostAttemptEvidenceIsInsufficient() throws Exception {
+        attempt.complete(FinalResult.NOT_SOLVED, Instant.now());
+        when(postAttemptSummaryService.summary(attempt)).thenReturn(summary(null));
+
+        mvc.perform(get("/attempts/{id}", attemptId)).andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("この課題を始める"))))
+                .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("続きから再開"))));
+    }
+
+    private PostAttemptSummary summary(LearningTaskCard card) {
+        AttemptQuality quality = new AttemptQuality(AttemptDataQualityStatus.VALID, AttemptAnalysisStatus.READY, 1, 0, false, false);
+        return new PostAttemptSummary("記録完了", "説明", "0秒", false, quality, List.of(), List.of(), List.of(), "次へ", new BottleneckAnalysis(List.of(), null), card == null ? null : card.task(), card);
     }
 }

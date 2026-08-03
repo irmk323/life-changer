@@ -20,7 +20,7 @@ public class PostAttemptSummaryService {
     public PostAttemptSummary summary(Attempt attempt) {
         List<StageAssessment> values=stages.findByAttemptIdOrderByStageTypeAsc(attempt.getId()).stream().sorted(Comparator.comparingInt(s->s.getStageType().getOrder())).toList();
         AttemptQuality q=quality.assess(attempt,values);
-        List<PostAttemptSummary.StageItem> items=values.stream().map(s -> new PostAttemptSummary.StageItem(s.getStageType(), outcome(attempt,s), s.getScore(), s.getAnswer(), Optional.ofNullable(hints.findMaxHintLevel(attempt.getId(),s.getStageType())).orElse(0), reveals.existsByAttemptIdAndStageAssessmentId(attempt.getId(),s.getId()))).toList();
+        List<PostAttemptSummary.StageItem> items=values.stream().filter(s -> s.getAssessmentStatus()!=StageAssessmentStatus.NOT_APPLICABLE).map(s -> new PostAttemptSummary.StageItem(s.getStageType(), outcome(attempt,s), s.getScore(), s.getAnswer(), Optional.ofNullable(hints.findMaxHintLevel(attempt.getId(),s.getStageType())).orElse(0), reveals.existsByAttemptIdAndStageAssessmentId(attempt.getId(),s.getId()))).toList();
         List<String> demonstrated=items.stream().filter(s->"自力".equals(s.outcome())).map(s->s.stage().getDisplayName()+"を自力で確認できた").toList();
         List<String> unmeasured=new ArrayList<>();
         if (q.unassessedCount()>0) unmeasured.add("工程別の自己評価が"+q.unassessedCount()+"件未入力です。");
@@ -28,7 +28,8 @@ public class PostAttemptSummaryService {
         if (attempt.getAttemptType()!=AttemptType.ISOMORPHIC_TRANSFER) unmeasured.add("見た目の異なる同型問題への転用はまだ未測定です。");
         BottleneckAnalysis analysis=q.analysisAllowed()?failures.analysis(attempt.getId()):new BottleneckAnalysis(List.of(),null);
         long seconds=Optional.ofNullable(attempt.getActiveDurationSeconds()).orElse(Optional.ofNullable(attempt.getDurationSeconds()).orElse(0L));
-        return new PostAttemptSummary(outcomeTitle(attempt), outcomeDescription(attempt,q), format(seconds), seconds>DURATION_OUTLIER_SECONDS, q, demonstrated, unmeasured, items, nextAction(attempt,q,analysis), analysis, adaptive.select(adaptive.evidenceFor(attempt)).orElse(null));
+        var taskCard=adaptive.cardFor(attempt).orElse(null);
+        return new PostAttemptSummary(outcomeTitle(attempt), outcomeDescription(attempt,q), format(seconds), seconds>DURATION_OUTLIER_SECONDS, q, demonstrated, unmeasured, items, nextAction(attempt,q,analysis), analysis, taskCard == null ? null : taskCard.task(), taskCard);
     }
     private String outcome(Attempt a, StageAssessment s) { if (quality.isLegacyAmbiguous(a,s)||s.getAssessmentStatus()==StageAssessmentStatus.NOT_STARTED||s.getAssessmentStatus()==StageAssessmentStatus.IN_PROGRESS) return "未評価"; if(s.getAssessmentStatus()==StageAssessmentStatus.NOT_APPLICABLE)return "対象外";if(s.getAssessmentStatus()==StageAssessmentStatus.SKIPPED)return "スキップ";return switch(s.getScore()){case 2->"自力";case 1->"ヒントあり";default->"できなかった";}; }
     private String outcomeTitle(Attempt a) { if(a.getAttemptType()==AttemptType.ISOMORPHIC_TRANSFER&&a.getFinalResult()==FinalResult.SOLVED_INDEPENDENTLY)return "同型問題への転用成功"; if(a.getFinalResult()==FinalResult.SOLVED_INDEPENDENTLY&&(a.getPriorExposure()==PriorExposure.SOLVED_BEFORE||a.getPriorExposure()==PriorExposure.MEMORISED))return "既知問題の再構築成功"; if(a.getFinalResult()==FinalResult.SOLVED_INDEPENDENTLY&&a.getPriorExposure()==PriorExposure.NEVER_SEEN)return "初見問題での自力成功"; return a.getFinalResult()==null?"記録完了":a.getFinalResult().getDisplayName(); }

@@ -7,6 +7,7 @@ import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
 
 import com.example.leetcodetrainer.attempt.domain.*;
 import com.example.leetcodetrainer.attempt.repository.AttemptRepository;
@@ -14,6 +15,7 @@ import com.example.leetcodetrainer.attempt.repository.StageAssessmentRepository;
 import com.example.leetcodetrainer.problem.repository.ProblemRepository;
 import com.example.leetcodetrainer.review.repository.ReviewScheduleRepository;
 import com.example.leetcodetrainer.referenceanswer.repository.StageReferenceAnswerRevealRepository;
+import com.example.leetcodetrainer.adaptive.repository.AttemptRecursiveContractRepository;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -34,6 +36,7 @@ class AttemptServiceIntegrationTest {
     @Autowired private MockMvc mockMvc;
     @Autowired private ReviewScheduleRepository reviewScheduleRepository;
     @Autowired private StageReferenceAnswerRevealRepository referenceAnswerRevealRepository;
+    @Autowired private AttemptRecursiveContractRepository recursiveContracts;
 
     @BeforeEach
     void cleanAttempts() { reviewScheduleRepository.deleteAll(); referenceAnswerRevealRepository.deleteAll(); stageAssessmentRepository.deleteAll(); attemptRepository.deleteAll(); }
@@ -69,6 +72,68 @@ class AttemptServiceIntegrationTest {
     }
 
     @Test
+    void recursiveProfileMarksOnlyItsExplicitlyExcludedLegacyStagesNotApplicable() {
+        var maximumDepth = problemRepository.findById(java.util.UUID.fromString("20000000-0000-0000-0000-000000000007")).orElseThrow();
+        Attempt attempt = attemptService.start(maximumDepth.getId(), AttemptType.INITIAL);
+
+        var stages = attemptService.stages(attempt.getId());
+        assertEquals(StageAssessmentStatus.NOT_APPLICABLE, stages.stream().filter(s -> s.getStageType() == StageType.REPEATED_WORK).findFirst().orElseThrow().getAssessmentStatus());
+        assertEquals(StageAssessmentStatus.NOT_APPLICABLE, stages.stream().filter(s -> s.getStageType() == StageType.DATA_STRUCTURE_SELECTION).findFirst().orElseThrow().getAssessmentStatus());
+        assertEquals(StageAssessmentStatus.NOT_STARTED, stages.stream().filter(s -> s.getStageType() == StageType.PROBLEM_RELATION).findFirst().orElseThrow().getAssessmentStatus());
+    }
+
+    @Test
+    void recursiveWorkspaceUsesProfileProgressAndRejectsNotApplicableNavigation() throws Exception {
+        var maximumDepth = problemRepository.findById(java.util.UUID.fromString("20000000-0000-0000-0000-000000000007")).orElseThrow();
+        Attempt attempt = attemptService.start(maximumDepth.getId(), AttemptType.INITIAL);
+
+        mockMvc.perform(get("/attempts/{id}/workspace", attempt.getId()))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("再帰関数の契約")))
+                .andExpect(content().string(containsString("1 / 10")))
+                .andExpect(content().string(not(containsString("1 / 13"))));
+        mockMvc.perform(get("/attempts/{id}/workspace", attempt.getId()).param("stage", StageType.REPEATED_WORK.name()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/attempts/" + attempt.getId() + "/workspace"));
+    }
+
+    @Test
+    void maximumDepthNormalAttemptSavesFourLineContractSeparatelyFromStageAnswer() throws Exception {
+        var maximumDepth = problemRepository.findById(java.util.UUID.fromString("20000000-0000-0000-0000-000000000007")).orElseThrow();
+        Attempt attempt = attemptService.start(maximumDepth.getId(), AttemptType.INITIAL);
+
+        mockMvc.perform(get("/attempts/{id}/workspace", attempt.getId()))
+                .andExpect(status().isOk()).andExpect(content().string(containsString("Four-line Contract")));
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/attempts/{id}/recursive-contract", attempt.getId())
+                        .param("functionContract", "depth(node)").param("baseCase", "null -> 0")
+                        .param("subproblems", "left and right").param("compositionRule", "1 + max"))
+                .andExpect(status().is3xxRedirection());
+        var contract=recursiveContracts.findById(attempt.getId()).orElseThrow();
+        assertEquals("depth(node)",contract.getFunctionContract()); assertEquals("null -> 0",contract.getBaseCase());
+        assertEquals("left and right",contract.getSubproblems()); assertEquals("1 + max",contract.getCompositionRule());
+        assertEquals(null,attemptService.stage(attempt.getId(),StageType.PROBLEM_RELATION).getAnswer());
+        mockMvc.perform(get("/attempts/{id}/workspace", attempt.getId()))
+                .andExpect(status().isOk()).andExpect(content().string(containsString("depth(node)")))
+                .andExpect(content().string(containsString("1 + max")));
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post("/attempts/{id}/recursive-contract", attempt.getId()))
+                .andExpect(status().is3xxRedirection());
+        var emptyDraft=recursiveContracts.findById(attempt.getId()).orElseThrow();
+        assertEquals(null,emptyDraft.getFunctionContract()); assertEquals(null,emptyDraft.getCompositionRule());
+    }
+
+    @Test
+    void quickAssessmentPreservesNotApplicableStagesAndLegacyThirteenStageRows() {
+        var maximumDepth = problemRepository.findById(java.util.UUID.fromString("20000000-0000-0000-0000-000000000007")).orElseThrow();
+        Attempt attempt = attemptService.start(maximumDepth.getId(), AttemptType.INITIAL);
+        attemptService.complete(attempt.getId(), FinalResult.NOT_SOLVED);
+        attemptService.quickAssess(attempt.getId(), java.util.Map.of(StageType.PROBLEM_RELATION, 1), java.util.Map.of(StageType.PROBLEM_RELATION, StageAssessmentStatus.ASSESSED));
+
+        assertEquals(13, attemptService.stages(attempt.getId()).size());
+        assertEquals(StageAssessmentStatus.NOT_APPLICABLE, attemptService.stages(attempt.getId()).stream().filter(s -> s.getStageType()==StageType.REPEATED_WORK).findFirst().orElseThrow().getAssessmentStatus());
+        assertEquals(1, attemptService.stages(attempt.getId()).stream().filter(s -> s.getStageType()==StageType.PROBLEM_RELATION).findFirst().orElseThrow().getScore());
+    }
+
+    @Test
     void workspaceRendersTheCognitiveStageWithoutPatternNameAnswerChecking() throws Exception {
         var problem = problemRepository.findByActiveTrueOrderByLeetcodeNumberAsc().getFirst();
         Attempt attempt = attemptService.start(problem.getId(), AttemptType.INITIAL);
@@ -78,7 +143,7 @@ class AttemptServiceIntegrationTest {
                 .andExpect(content().string(containsString("問題の関係")))
                 .andExpect(content().string(containsString("考えるためのヒント")))
                 .andExpect(content().string(containsString("次に見られるヒント: レベル 1")))
-                .andExpect(content().string(containsString("思考の13工程")))
+                .andExpect(content().string(containsString("現在の必須工程")))
                 .andExpect(content().string(not(containsString("パターン名を確認する"))))
                 .andExpect(content().string(not(containsString("Hash Lookup"))));
     }
