@@ -1,1 +1,0 @@
-package com.example.leetcodetrainer.curriculum.repository; import com.example.leetcodetrainer.curriculum.domain.*; import java.util.*; import org.springframework.data.jpa.repository.JpaRepository; public interface CurriculumItemRepository extends JpaRepository<CurriculumItem,UUID>{List<CurriculumItem> findByActiveTrueOrderByDisplayOrderAsc();}

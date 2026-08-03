@@ -1,2 +1,0 @@
-CREATE TABLE learning_task_attempt (id UUID PRIMARY KEY, task_template_id UUID NOT NULL, attempt_id UUID NOT NULL UNIQUE, created_at TIMESTAMP WITH TIME ZONE NOT NULL, CONSTRAINT fk_task_attempt_template FOREIGN KEY(task_template_id) REFERENCES learning_task_template(id), CONSTRAINT fk_task_attempt_attempt FOREIGN KEY(attempt_id) REFERENCES attempts(id));
-CREATE INDEX idx_task_attempt_template ON learning_task_attempt(task_template_id);

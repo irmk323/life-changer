@@ -1,4 +1,0 @@
-package com.example.leetcodetrainer.adaptive.service;
-import static org.assertj.core.api.Assertions.assertThat;
-import com.example.leetcodetrainer.adaptive.repository.LearningTaskTemplateRepository; import org.junit.jupiter.api.Test; import org.springframework.beans.factory.annotation.Autowired; import org.springframework.boot.test.context.SpringBootTest; import org.springframework.test.context.ActiveProfiles;
-@SpringBootTest @ActiveProfiles("test") class AdaptiveTaskSeedIntegrationTest { @Autowired LearningTaskTemplateRepository tasks; @Test void seedsConcreteTwoSumAndRecursiveTasks(){assertThat(tasks.findByActiveTrueOrderByCodeAsc()).extracting(t->t.getCode()).contains("two-sum-relation-first","movie-ticket-pair","maximum-depth-error-repair","count-nodes-transfer","minimum-depth-near-transfer");}}
