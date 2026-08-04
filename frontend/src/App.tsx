@@ -8,8 +8,8 @@ import {
   useNavigate,
   useParams,
 } from "react-router";
-import { Calendar, Home, BookOpen, Code2, Network, Brain, Pencil, ArrowUp, ArrowDown } from "lucide-react";
-import { useState } from "react";
+import { Calendar, Home, BookOpen, Code2, Network, Brain, Pencil, ArrowUp, ArrowDown, AlarmClock, CalendarDays, CheckCircle2, ClipboardList, Flame, GripVertical, Plus, Sparkles, Target, TrendingUp } from "lucide-react";
+import { useRef, useState, type ElementType } from "react";
 import {
   DomainProgress,
   PageHeader,
@@ -83,6 +83,10 @@ function Dashboard() {
     s = streak(state.activities),
     [text, setText] = useState(""),
     [edit, setEdit] = useState<any | null>(null);
+  const newPriorityInput = useRef<HTMLInputElement>(null);
+  const dueToday = state.learningItems.filter((x: any) => x.nextReviewAt === localDate()).length;
+  const overdue = state.learningItems.filter((x: any) => x.nextReviewAt && x.nextReviewAt < localDate()).length;
+  const readiness = progress(state.learningItems).percentage;
   const priorities = [
     ...state.priorities,
     ...suggested(state).map((x: any, index: number) => ({
@@ -114,37 +118,55 @@ function Dashboard() {
     }
     dispatch({ type: "PRIORITY_REORDER", payload: { id: target.id, direction } });
   };
+  const priorityDomain = (title: string) => {
+    const value = title.toLowerCase();
+    if (value.includes("design") || value.includes("url")) return "System Design";
+    if (value.includes("java")) return "Java Theory";
+    if (value.includes("tree") || value.includes("array") || value.includes("dsa")) return "DSA";
+    return "Focus";
+  };
+  const activityIcon = (domain: string) =>
+    domain === "DSA" ? <Code2 size={15} /> : domain === "BEHAVIOUR" ? <Sparkles size={15} /> : <BookOpen size={15} />;
+  const statCards: Array<{ label: string; value: string | number; Icon: ElementType; description: string }> = [
+    { label: "Overall readiness", value: `${readiness}%`, Icon: Target, description: "Your interview preparation progress" },
+    { label: "Reviews due today", value: dueToday, Icon: ClipboardList, description: dueToday ? "Keep the review loop moving" : "All caught up for today" },
+    { label: "Overdue reviews", value: overdue, Icon: AlarmClock, description: overdue ? "Clear these first" : "Nothing is waiting" },
+    { label: "Weekly sessions", value: state.activities.length, Icon: CalendarDays, description: "Goal: 6 focused sessions" },
+    { label: "Retention", value: "Prototype", Icon: TrendingUp, description: "Track this as you practise" },
+    { label: "Study streak", value: `${s.current} days`, Icon: Flame, description: `Longest: ${s.longest} days` },
+  ];
   return (
     <>
-      <PageHeader title="Dashboard" />
-      <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        {[
-          ["Overall readiness", progress(state.learningItems).percentage + "%"],
-          [
-            "Due today",
-            state.learningItems.filter(
-              (x: any) => x.nextReviewAt === localDate(),
-            ).length,
-          ],
-          [
-            "Overdue",
-            state.learningItems.filter(
-              (x: any) => x.nextReviewAt && x.nextReviewAt < localDate(),
-            ).length,
-          ],
-          ["Weekly sessions", state.activities.length],
-          ["Retention", "Prototype"],
-          ["Study streak", `${s.current} days · Longest: ${s.longest}`],
-        ].map(([a, b]) => (
-          <section className="rounded-xl border bg-white p-3" key={a as string}>
-            <small>{a}</small>
-            <strong className="block text-lg">{b}</strong>
+      <header className="dashboard-heading">
+        <div>
+          <h1>Dashboard</h1>
+          <p>Your daily command center to prepare for a Senior Java Engineer role.</p>
+        </div>
+        <button className="dashboard-primary" onClick={() => newPriorityInput.current?.focus()}>
+          <Plus size={17} /> Add priority
+        </button>
+      </header>
+      <div className="dashboard-stats">
+        {statCards.map(({ label, value, Icon, description }) => (
+          <section className="dashboard-stat" key={label}>
+            <span className="dashboard-stat__icon"><Icon size={27} strokeWidth={1.7} /></span>
+            <div>
+              <p>{label}</p>
+              <strong>{value}</strong>
+              <small>{description}</small>
+            </div>
           </section>
         ))}
       </div>
-      <div className="mt-5 grid gap-5 lg:grid-cols-2">
-        <section className="priority-panel rounded-xl border bg-white p-4">
-          <h2 className="font-bold">Today’s Priorities</h2>
+      <div className="dashboard-main-grid">
+        <section className="dashboard-panel priority-panel">
+          <div className="dashboard-panel__heading">
+            <div>
+              <h2>Today’s priorities</h2>
+              <p>Focus on what moves the needle. Reorder and edit as needed.</p>
+            </div>
+            <span className="dashboard-panel__hint"><Sparkles size={15} /> Auto-suggested</span>
+          </div>
           {priorities.map((p: any) =>
             edit?.id === p.id ? (
               <form
@@ -176,11 +198,13 @@ function Dashboard() {
                 <button
                   className="text-[#923d36]"
                   type="button"
-                  onClick={() => {
-                    if (confirm(`Delete ${p.title}?`)) {
-                      p.source === "AUTO"
-                        ? dispatch({ type: "DISMISS_AUTO", payload: p.id.replace("auto-", "") })
-                        : dispatch({ type: "DELETE", payload: { collection: "priorities", id: p.id } });
+                    onClick={() => {
+                      if (confirm(`Delete ${p.title}?`)) {
+                      if (p.source === "AUTO") {
+                        dispatch({ type: "DISMISS_AUTO", payload: p.id.replace("auto-", "") });
+                      } else {
+                        dispatch({ type: "DELETE", payload: { collection: "priorities", id: p.id } });
+                      }
                       setEdit(null);
                     }
                   }}
@@ -189,25 +213,29 @@ function Dashboard() {
                 </button>
               </form>
             ) : (
-              <div className={`priority-row flex items-center gap-2 border-t py-2 ${p.completed ? "priority-row--completed" : ""}`} key={p.id}>
+              <div className={`priority-row ${p.completed ? "priority-row--completed" : ""}`} key={p.id}>
                 <input
                   type="checkbox"
                   checked={p.completed}
                   onChange={(e) => persistPriority({ ...p, completed: e.target.checked })}
                 />
-                <span className="flex-1">
+                <span className="priority-row__title">
                   {p.title}
-                  <small className="block">Due {p.dueDate}</small>
                 </span>
+                <span className="priority-row__date"><Calendar size={16} /> {p.dueDate === localDate() ? "Today" : p.dueDate}</span>
+                <span className="priority-row__domain">{priorityDomain(p.title)}</span>
                 <Badge>{p.priority}</Badge>
                 <button className="icon-button" aria-label={`Edit ${p.title}`} title="Edit" onClick={() => setEdit(p)}><Pencil size={15} /></button>
-                <button className="icon-button" aria-label={`Move ${p.title} up`} title="Move up" onClick={() => movePriority(p, -1)}><ArrowUp size={15} /></button>
-                <button className="icon-button" aria-label={`Move ${p.title} down`} title="Move down" onClick={() => movePriority(p, 1)}><ArrowDown size={15} /></button>
+                <span className="priority-row__move">
+                  <button className="icon-button" aria-label={`Move ${p.title} up`} title="Move up" onClick={() => movePriority(p, -1)}><ArrowUp size={14} /></button>
+                  <button className="icon-button" aria-label={`Move ${p.title} down`} title="Move down" onClick={() => movePriority(p, 1)}><ArrowDown size={14} /></button>
+                  <GripVertical size={16} aria-hidden="true" />
+                </span>
               </div>
             ),
           )}
           <form
-            className="mt-3 flex gap-2 border-t pt-3"
+            className="dashboard-add-priority"
             onSubmit={(e) => {
               e.preventDefault();
               if (text) {
@@ -220,12 +248,14 @@ function Dashboard() {
               }
             }}
           >
-            <input value={text} onChange={(e) => setText(e.target.value)} className="flex-1 rounded border p-2" aria-label="New todo" placeholder="Add a task" />
-            <button className="rounded bg-teal-700 px-3 text-white">Add task</button>
+            <input ref={newPriorityInput} value={text} onChange={(e) => setText(e.target.value)} className="flex-1 rounded border p-2" aria-label="New todo" placeholder="Add a priority" />
+            <button className="dashboard-primary"><Plus size={16} /> Add priority</button>
           </form>
         </section>
-        <section className="lc-panel rounded-xl border bg-white p-4">
-          <h2 className="font-bold">Domain progress</h2>
+        <section className="dashboard-panel domain-panel">
+          <div className="dashboard-panel__heading">
+            <div><h2>Domain progress</h2><p>Your progress by key interview domains.</p></div>
+          </div>
           {[
             ["Behaviour", "BEHAVIOUR"],
             ["Java Theory", "JAVA_THEORY"],
@@ -238,8 +268,8 @@ function Dashboard() {
               ? { done: taskItems.filter((item: any) => item.status === "INTERVIEW_READY").length, total: taskItems.length, percentage: taskItems.length ? Math.round(taskItems.filter((item: any) => item.status === "INTERVIEW_READY").length / taskItems.length * 100) : 0 }
               : progress(x === "DSA" ? state.dsa : state.learningItems.filter((i: any) => i.domain === x), x === "DSA");
             return (
-              <div className="mb-3" key={x}>
-                <div className="flex justify-between text-sm">
+              <div className="domain-progress-row" key={x}>
+                <div>
                   <span>{label}</span>
                   <strong>{p.percentage}%</strong>
                 </div>
@@ -252,13 +282,11 @@ function Dashboard() {
               </div>
             );
           })}
-          <p className="text-sm text-[#657777]">
-            Prototype readiness is based on completed and passed items.
-          </p>
+          <Link to="/behaviour" className="dashboard-secondary">View all domains</Link>
         </section>
       </div>
-      <section className="lc-panel mt-5 rounded-xl border bg-white p-4">
-        <h2 className="mb-3 font-bold">Recent activity</h2>
+      <section className="dashboard-panel dashboard-activity">
+        <div className="dashboard-panel__heading"><div><h2>Recent activity</h2><p>Latest actions and results across your preparation.</p></div></div>
         {state.activities.length === 0 ? (
           <p className="text-[#657777]">No activity yet.</p>
         ) : (
@@ -279,14 +307,14 @@ function Dashboard() {
                   .sort((a: any, b: any) => b.date.localeCompare(a.date))
                   .slice(0, 5)
                   .map((activity: any) => (
-                    <tr className="border-b" key={activity.id}>
-                      <td className="p-2">{activity.date}</td>
+                    <tr key={activity.id}>
+                      <td className="dashboard-activity__date"><span>{activityIcon(activity.domain)}</span>{activity.date}</td>
                       <td className="p-2">
                         {activity.domain.replaceAll("_", " ")}
                       </td>
                       <td className="p-2">{activity.label}</td>
                       <td className="p-2">
-                        <Badge>{activity.result}</Badge>
+                        <span className="dashboard-result"><CheckCircle2 size={15} /><Badge>{activity.result}</Badge></span>
                       </td>
                       <td className="p-2">
                         {activity.durationMinutes
@@ -299,6 +327,7 @@ function Dashboard() {
             </table>
           </div>
         )}
+        <Link to="/calendar" className="dashboard-secondary">View all activity</Link>
       </section>
     </>
   );
