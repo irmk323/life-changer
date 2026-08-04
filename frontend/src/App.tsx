@@ -1,0 +1,1203 @@
+import {
+  HashRouter,
+  Link,
+  NavLink,
+  Navigate,
+  Route,
+  Routes,
+  useNavigate,
+  useParams,
+} from "react-router";
+import { Calendar, Home, BookOpen, Code2, Network, Brain, Pencil, ArrowUp, ArrowDown } from "lucide-react";
+import { useState } from "react";
+import {
+  DomainProgress,
+  PageHeader,
+  QuestionRow,
+  Badge,
+} from "./components/common";
+import { useAppState } from "./app/AppStateProvider";
+import { sampleData } from "./data/sampleData";
+import {
+  dueState,
+  progress,
+  streak,
+  suggested,
+  localDate,
+} from "./services/readiness/calculations";
+const nav = [
+  ["/dashboard", "Dashboard", Home],
+  ["/motivation", "Motivation", Brain],
+  ["/calendar", "Calendar", Calendar],
+  ["/behaviour", "Behaviour", BookOpen],
+  ["/java", "Java Theory", BookOpen],
+  ["/dsa", "DSA", Code2],
+  ["/functional-coding", "Functional Coding", Code2],
+  ["/system-design", "System Design", Network],
+] as const;
+function Shell({ children }: { children: React.ReactNode }) {
+  const { dispatch } = useAppState();
+  return (
+    <div className="min-h-screen bg-[#f6f8f7] text-[#203334]">
+      <aside className="fixed hidden h-screen w-60 bg-[#183d3a] p-4 text-[#e8f2ef] md:block">
+        <h1 className="mb-2 text-xl font-bold">
+          Life <span className="text-[#9bd0c3]">Changer</span>
+        </h1>
+        <p className="mb-8 text-xs text-[#a8c1bc]">Interview preparation</p>
+        {nav.map(([to, label, Icon]) => (
+          <NavLink
+            key={to}
+            to={to}
+            className={({ isActive }) =>
+              `mb-1 flex items-center gap-2 rounded px-3 py-2 ${isActive ? "bg-[#2a5d57] font-semibold text-white" : "text-[#dce9e6] hover:bg-[#24514c] hover:text-white"}`
+            }
+          >
+            <Icon size={18} />
+            {label}
+          </NavLink>
+        ))}
+        <button
+          className="mt-auto w-full rounded border border-[#6f9790] px-3 py-2 text-sm text-[#dce9e6] hover:bg-[#24514c]"
+          onClick={() =>
+            confirm("Reset React prototype data to the sample data?") &&
+            dispatch({ type: "REPLACE", payload: sampleData() })
+          }
+        >
+          Reset sample data
+        </button>
+      </aside>
+      <main className="mx-auto max-w-[1500px] p-4 md:ml-60 md:p-8">{children}</main>
+    </div>
+  );
+}
+const domain = (state: any, name: string, key: string) => {
+  const taskItems = key === "FUNCTIONAL_CODING" ? state.functionalTasks : key === "SYSTEM_DESIGN" ? state.systemDesignTasks : null;
+  const items = key === "DSA" ? state.dsa : taskItems || state.learningItems.filter((x: any) => x.domain === key);
+  const x = taskItems
+    ? { done: taskItems.filter((item: any) => item.status === "INTERVIEW_READY").length, total: taskItems.length, percentage: taskItems.length ? Math.round(taskItems.filter((item: any) => item.status === "INTERVIEW_READY").length / taskItems.length * 100) : 0 }
+    : progress(items, key === "DSA");
+  return <DomainProgress name={name} {...x} />;
+};
+function Dashboard() {
+  const { state, dispatch } = useAppState(),
+    s = streak(state.activities),
+    [text, setText] = useState(""),
+    [edit, setEdit] = useState<any | null>(null);
+  const priorities = [
+    ...state.priorities,
+    ...suggested(state).map((x: any, index: number) => ({
+      id: `auto-${x.id}`,
+      title: x.title,
+      dueDate: x.nextReviewAt,
+      priority: "HIGH",
+      completed: false,
+      source: "AUTO",
+      order: state.priorities.length + index,
+    })),
+  ].sort((a: any, b: any) => a.order - b.order);
+  const upsert = (item: any) =>
+    dispatch({ type: "UPSERT", payload: { collection: "priorities", item } });
+  const manualPriority = (item: any) => ({ ...item, id: crypto.randomUUID(), source: "MANUAL", order: state.priorities.length });
+  const persistPriority = (item: any) => {
+    if (item.source === "AUTO") {
+      dispatch({ type: "DISMISS_AUTO", payload: item.id.replace("auto-", "") });
+      upsert(manualPriority(item));
+      return;
+    }
+    upsert(item);
+  };
+  const movePriority = (item: any, direction: -1 | 1) => {
+    const target = item.source === "AUTO" ? manualPriority(item) : item;
+    if (item.source === "AUTO") {
+      dispatch({ type: "DISMISS_AUTO", payload: item.id.replace("auto-", "") });
+      upsert(target);
+    }
+    dispatch({ type: "PRIORITY_REORDER", payload: { id: target.id, direction } });
+  };
+  return (
+    <>
+      <PageHeader title="Dashboard" />
+      <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        {[
+          ["Overall readiness", progress(state.learningItems).percentage + "%"],
+          [
+            "Due today",
+            state.learningItems.filter(
+              (x: any) => x.nextReviewAt === localDate(),
+            ).length,
+          ],
+          [
+            "Overdue",
+            state.learningItems.filter(
+              (x: any) => x.nextReviewAt && x.nextReviewAt < localDate(),
+            ).length,
+          ],
+          ["Weekly sessions", state.activities.length],
+          ["Retention", "Prototype"],
+          ["Study streak", `${s.current} days · Longest: ${s.longest}`],
+        ].map(([a, b]) => (
+          <section className="rounded-xl border bg-white p-3" key={a as string}>
+            <small>{a}</small>
+            <strong className="block text-lg">{b}</strong>
+          </section>
+        ))}
+      </div>
+      <div className="mt-5 grid gap-5 lg:grid-cols-2">
+        <section className="priority-panel rounded-xl border bg-white p-4">
+          <h2 className="font-bold">Today’s Priorities</h2>
+          {priorities.map((p: any) =>
+            edit?.id === p.id ? (
+              <form
+                className="flex flex-wrap gap-2 border-t py-2"
+                key={p.id}
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const f = new FormData(e.currentTarget);
+                  persistPriority({
+                    ...p,
+                    title: String(f.get("title")),
+                    dueDate: String(f.get("dueDate")),
+                    priority: String(f.get("priority")),
+                  });
+                  setEdit(null);
+                }}
+              >
+                <input name="title" defaultValue={p.title} />
+                <input name="dueDate" type="date" defaultValue={p.dueDate} />
+                <select name="priority" defaultValue={p.priority}>
+                  <option>HIGH</option>
+                  <option>MEDIUM</option>
+                  <option>LOW</option>
+                </select>
+                <button>Save</button>
+                <button type="button" onClick={() => setEdit(null)}>
+                  Cancel
+                </button>
+                <button
+                  className="text-[#923d36]"
+                  type="button"
+                  onClick={() => {
+                    if (confirm(`Delete ${p.title}?`)) {
+                      p.source === "AUTO"
+                        ? dispatch({ type: "DISMISS_AUTO", payload: p.id.replace("auto-", "") })
+                        : dispatch({ type: "DELETE", payload: { collection: "priorities", id: p.id } });
+                      setEdit(null);
+                    }
+                  }}
+                >
+                  Delete task
+                </button>
+              </form>
+            ) : (
+              <div className={`priority-row flex items-center gap-2 border-t py-2 ${p.completed ? "priority-row--completed" : ""}`} key={p.id}>
+                <input
+                  type="checkbox"
+                  checked={p.completed}
+                  onChange={(e) => persistPriority({ ...p, completed: e.target.checked })}
+                />
+                <span className="flex-1">
+                  {p.title}
+                  <small className="block">Due {p.dueDate}</small>
+                </span>
+                <Badge>{p.priority}</Badge>
+                <button className="icon-button" aria-label={`Edit ${p.title}`} title="Edit" onClick={() => setEdit(p)}><Pencil size={15} /></button>
+                <button className="icon-button" aria-label={`Move ${p.title} up`} title="Move up" onClick={() => movePriority(p, -1)}><ArrowUp size={15} /></button>
+                <button className="icon-button" aria-label={`Move ${p.title} down`} title="Move down" onClick={() => movePriority(p, 1)}><ArrowDown size={15} /></button>
+              </div>
+            ),
+          )}
+          <form
+            className="mt-3 flex gap-2 border-t pt-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (text) {
+                upsert({
+                  id: crypto.randomUUID(), title: text, dueDate: localDate(),
+                  priority: "MEDIUM", completed: false, source: "MANUAL",
+                  order: state.priorities.length,
+                });
+                setText("");
+              }
+            }}
+          >
+            <input value={text} onChange={(e) => setText(e.target.value)} className="flex-1 rounded border p-2" aria-label="New todo" placeholder="Add a task" />
+            <button className="rounded bg-teal-700 px-3 text-white">Add task</button>
+          </form>
+        </section>
+        <section className="lc-panel rounded-xl border bg-white p-4">
+          <h2 className="font-bold">Domain progress</h2>
+          {[
+            ["Behaviour", "BEHAVIOUR"],
+            ["Java Theory", "JAVA_THEORY"],
+            ["DSA", "DSA"],
+            ["Functional Coding", "FUNCTIONAL_CODING"],
+            ["System Design", "SYSTEM_DESIGN"],
+          ].map(([label, x]) => {
+            const taskItems = x === "FUNCTIONAL_CODING" ? state.functionalTasks : x === "SYSTEM_DESIGN" ? state.systemDesignTasks : null;
+            const p = taskItems
+              ? { done: taskItems.filter((item: any) => item.status === "INTERVIEW_READY").length, total: taskItems.length, percentage: taskItems.length ? Math.round(taskItems.filter((item: any) => item.status === "INTERVIEW_READY").length / taskItems.length * 100) : 0 }
+              : progress(x === "DSA" ? state.dsa : state.learningItems.filter((i: any) => i.domain === x), x === "DSA");
+            return (
+              <div className="mb-3" key={x}>
+                <div className="flex justify-between text-sm">
+                  <span>{label}</span>
+                  <strong>{p.percentage}%</strong>
+                </div>
+                <div className="mt-1 h-2 rounded bg-[#d9e3e0]">
+                  <div
+                    className="h-2 rounded bg-[#21675d]"
+                    style={{ width: `${p.percentage}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+          <p className="text-sm text-[#657777]">
+            Prototype readiness is based on completed and passed items.
+          </p>
+        </section>
+      </div>
+      <section className="lc-panel mt-5 rounded-xl border bg-white p-4">
+        <h2 className="mb-3 font-bold">Recent activity</h2>
+        {state.activities.length === 0 ? (
+          <p className="text-[#657777]">No activity yet.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[620px] text-left text-sm">
+              <thead className="border-b text-xs uppercase tracking-wide text-[#657777]">
+                <tr>
+                  <th className="p-2">Date</th>
+                  <th className="p-2">Domain</th>
+                  <th className="p-2">Item</th>
+                  <th className="p-2">Result</th>
+                  <th className="p-2">Duration</th>
+                </tr>
+              </thead>
+              <tbody>
+                {state.activities
+                  .slice()
+                  .sort((a: any, b: any) => b.date.localeCompare(a.date))
+                  .slice(0, 5)
+                  .map((activity: any) => (
+                    <tr className="border-b" key={activity.id}>
+                      <td className="p-2">{activity.date}</td>
+                      <td className="p-2">
+                        {activity.domain.replaceAll("_", " ")}
+                      </td>
+                      <td className="p-2">{activity.label}</td>
+                      <td className="p-2">
+                        <Badge>{activity.result}</Badge>
+                      </td>
+                      <td className="p-2">
+                        {activity.durationMinutes
+                          ? `${activity.durationMinutes} min`
+                          : "—"}
+                      </td>
+                    </tr>
+                  ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </>
+  );
+}
+function Questions({ kind }: { kind: "BEHAVIOUR" | "JAVA_THEORY" | "DDIA" }) {
+  const { state, dispatch } = useAppState();
+  const { chapterId } = useParams();
+  const [tab, setTab] = useState("CORE_JAVA"),
+    [text, setText] = useState("");
+  const items = state.learningItems.filter(
+    (x: any) =>
+      x.domain === kind &&
+      (kind !== "JAVA_THEORY" || x.track === tab) &&
+      (kind !== "DDIA" || x.track === `CHAPTER_${chapterId || "1"}`),
+  );
+  const title =
+    kind === "JAVA_THEORY"
+      ? "Java Theory"
+      : kind === "DDIA"
+        ? "DDIA"
+        : "Behaviour";
+  return (
+    <>
+      <PageHeader title={title} />
+      {kind !== "DDIA" && domain(state, title, kind)}
+      {kind === "JAVA_THEORY" && (
+        <div className="app-tabs mb-3" role="tablist" aria-label="Java topic">
+          <button className={`app-tab ${tab === "CORE_JAVA" ? "app-tab--active" : ""}`} role="tab" aria-selected={tab === "CORE_JAVA"} onClick={() => setTab("CORE_JAVA")}>Core Java</button>
+          <button className={`app-tab ${tab === "SPRING_BOOT" ? "app-tab--active" : ""}`} role="tab" aria-selected={tab === "SPRING_BOOT"} onClick={() => setTab("SPRING_BOOT")}>Spring Boot</button>
+        </div>
+      )}
+      <form
+        className="mb-3 flex gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (text) {
+            dispatch({
+              type: "UPSERT",
+              payload: {
+                collection: "learningItems",
+                item: {
+                  id: crypto.randomUUID(),
+                  domain: kind,
+                  track:
+                    kind === "JAVA_THEORY"
+                      ? tab
+                      : kind === "DDIA"
+                        ? `CHAPTER_${chapterId || "1"}`
+                        : "BEHAVIOUR",
+                  title: text,
+                  question: text,
+                  category: "General",
+                  priority: "P1",
+                  modelAnswer: "",
+                  personalAnswer: "",
+                  notes: "",
+                  followUps: "",
+                  latestResult: null,
+                  lastPractisedAt: null,
+                  nextReviewAt: null,
+                },
+              },
+            });
+            setText("");
+          }
+        }}
+      >
+        <input
+          required
+          className="flex-1 rounded border p-2"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="New interview question"
+        />
+        <button className="rounded bg-teal-700 px-3 text-white">
+          Add question
+        </button>
+      </form>
+      <div className="question-list grid gap-0">
+        {items.map((x: any) => (
+          <QuestionRow key={x.id} item={x} java={kind === "JAVA_THEORY"} />
+        ))}
+      </div>
+    </>
+  );
+}
+function Dsa() {
+  const { state, dispatch } = useAppState();
+  return (
+    <>
+      <PageHeader title="DSA" />
+      {domain(state, "DSA", "DSA")}
+      <div className="lc-panel rounded-xl border bg-white p-4">
+        <p className="mb-3">
+          Review steadily: completed reviews repair the bridge.
+        </p>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[760px] text-left">
+            <thead>
+              <tr>
+                <th>Problem</th>
+                <th>First solved</th>
+                <th>D+1</th>
+                <th>D+4</th>
+                <th>D+17</th>
+              </tr>
+            </thead>
+            <tbody>
+              {state.dsa.map((p: any) => (
+                <tr className="border-t" key={p.id}>
+                  <td>
+                    <Link className="table-link" to={`/dsa/${p.id}`}>
+                      {p.title}
+                    </Link>
+                    <a
+                      className="ml-2 text-sm underline"
+                      href={p.leetcodeUrl || "#"}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      LeetCode ↗
+                    </a>
+                  </td>
+                  <td>{p.firstSolvedAt || "Not solved"}</td>
+                  {(["D1", "D4", "D17"] as const).map((stage) => {
+                    const r = p.reviews.find((x: any) => x.stage === stage);
+                    if (!r) {
+                      return <td className="p-2 text-[#657777]" key={stage}>—</td>;
+                    }
+                    const [stateLabel, label] = dueState(r.dueAt, r.completed);
+                    return (
+                      <td
+                        key={stage}
+                        className={`dsa-review dsa-review--${stateLabel.toLowerCase()}`}
+                      >
+                        <label>
+                          <input
+                            type="checkbox"
+                            checked={r.completed}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={(e) =>
+                              dispatch({
+                                type: "DSA_UPDATE",
+                                payload: {
+                                  ...p,
+                                  reviews: p.reviews.map((x: any) =>
+                                    x.stage === stage
+                                      ? {
+                                          ...x,
+                                          completed: e.target.checked,
+                                          completedAt: e.target.checked
+                                            ? localDate()
+                                            : null,
+                                        }
+                                      : x,
+                                  ),
+                                },
+                              })
+                            }
+                          />{" "}
+                          {stage}
+                        </label>
+                        <small className="block">
+                          {r.dueAt} · {label}
+                        </small>
+                        <Link
+                          className="table-link text-sm"
+                          to={`/dsa/${p.id}`}
+                        >
+                          Notes
+                        </Link>
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </>
+  );
+}
+function DsaDetail() {
+  const { id = "" } = useParams(),
+    { state, dispatch } = useAppState(),
+    nav = useNavigate();
+  const p = state.dsa.find((x: any) => x.id === id);
+  if (!p) return <Navigate to="/dsa" />;
+  const save = (field: string, value: string) =>
+    dispatch({ type: "DSA_UPDATE", payload: { ...p, [field]: value } });
+  return (
+    <>
+      <PageHeader title={p.title}>
+        <button onClick={() => nav("/dsa")}>← Back</button>
+      </PageHeader>
+      <a
+        href={p.leetcodeUrl || "#"}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="underline"
+      >
+        Open in LeetCode ↗
+      </a>
+      <section className="mt-4 rounded-xl border bg-white p-4">
+        <label>
+          Initial solve notes
+          <textarea
+            defaultValue={p.initialNotes}
+            onBlur={(e) => save("initialNotes", e.target.value)}
+            className="mt-1 w-full rounded border p-2"
+          />
+        </label>
+        {p.reviews.map((r: any) => (
+          <label className="mt-3 block" key={r.stage}>
+            {r.stage} review note
+            <textarea
+              defaultValue={r.note}
+              onBlur={(e) =>
+                dispatch({
+                  type: "DSA_UPDATE",
+                  payload: {
+                    ...p,
+                    reviews: p.reviews.map((x: any) =>
+                      x.stage === r.stage ? { ...x, note: e.target.value } : x,
+                    ),
+                  },
+                })
+              }
+              className="mt-1 w-full rounded border p-2"
+            />
+          </label>
+        ))}
+        <label className="mt-3 block">
+          General notes
+          <textarea
+            defaultValue={p.generalNotes}
+            onBlur={(e) => save("generalNotes", e.target.value)}
+            className="mt-1 w-full rounded border p-2"
+          />
+        </label>
+      </section>
+    </>
+  );
+}
+function CalendarPage() {
+  const { state, dispatch } = useAppState(),
+    [day, setDay] = useState(localDate()),
+    [month, setMonth] = useState(() => new Date());
+  const log = state.dailyLogs.find((x: any) => x.date === day),
+    first = new Date(month.getFullYear(), month.getMonth(), 1),
+    start = new Date(first);
+  start.setDate(1 - first.getDay());
+  const colours: any = {
+    DSA: "bg-blue-600",
+    SYSTEM_DESIGN: "bg-red-600",
+    BEHAVIOUR: "bg-purple-600",
+    JAVA_THEORY: "bg-green-600",
+    FUNCTIONAL_CODING: "bg-orange-500",
+  };
+  return (
+    <>
+      <PageHeader title="Calendar" />
+      <p className="mb-3 flex flex-wrap gap-3 text-sm">
+        <span>
+          <i className="inline-block size-2 rounded-full bg-blue-600" /> DSA
+        </span>
+        <span>
+          <i className="inline-block size-2 rounded-full bg-red-600" /> System
+          Design
+        </span>
+        <span>
+          <i className="inline-block size-2 rounded-full bg-purple-600" />{" "}
+          Behaviour
+        </span>
+        <span>
+          <i className="inline-block size-2 rounded-full bg-green-600" /> Java
+          Theory
+        </span>
+        <span>
+          <i className="inline-block size-2 rounded-full bg-orange-500" />{" "}
+          Functional Coding
+        </span>
+      </p>
+      <section className="rounded-xl border bg-white p-4">
+        <div className="mb-3 flex justify-between">
+          <button
+            onClick={() =>
+              setMonth(new Date(month.getFullYear(), month.getMonth() - 1, 1))
+            }
+          >
+            Previous
+          </button>
+          <strong>
+            {month.toLocaleString("en-GB", { month: "long", year: "numeric" })}
+          </strong>
+          <button
+            onClick={() =>
+              setMonth(new Date(month.getFullYear(), month.getMonth() + 1, 1))
+            }
+          >
+            Next
+          </button>
+        </div>
+        <div className="grid grid-cols-7 text-center text-xs text-slate-500">
+          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((x) => (
+            <span key={x}>{x}</span>
+          ))}
+        </div>
+        <div className="grid grid-cols-7">
+          {Array.from({ length: 42 }, (_, i) => {
+            const d = new Date(start);
+            d.setDate(start.getDate() + i);
+            const iso = d.toLocaleDateString("en-CA"),
+              activityCount = state.activities.filter((a: any) => a.date === iso).length,
+              domains = [
+                ...new Set(
+                  state.activities
+                    .filter((a: any) => a.date === iso)
+                    .map((a: any) => a.domain),
+                ),
+              ];
+            return (
+              <button
+                key={iso}
+                onClick={() => setDay(iso)}
+                className={`calendar-day min-h-16 border p-1 text-left ${iso === day ? "bg-teal-50" : ""} ${d.getMonth() !== month.getMonth() ? "text-slate-400" : ""}`}
+              >
+                <time>{d.getDate()}</time>
+                {activityCount > 0 && <span className="mt-1 block text-[10px] text-[#657777]">{activityCount} {activityCount === 1 ? "activity" : "activities"}</span>}
+                <span className="mt-1 flex gap-1">
+                  {domains.map((x: any) => (
+                    <i
+                      key={x}
+                      title={`${x} activity`}
+                      aria-label={`${x} activity`}
+                      className={`inline-block size-2 rounded-full ${colours[x]}`}
+                    />
+                  ))}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </section>
+      <section className="mt-4 grid gap-4 md:grid-cols-2">
+        <div className="lc-panel rounded-xl border bg-white p-4">
+          <h2 className="font-bold">{day} activities</h2>
+          {state.activities.filter((x: any) => x.date === day).length === 0 ? (
+            <p className="mt-3 text-[#657777]">
+              No learning activity recorded.
+            </p>
+          ) : (
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full min-w-[560px] text-left text-sm">
+                <thead className="border-b text-xs uppercase tracking-wide text-[#657777]">
+                  <tr>
+                    <th className="p-2">Date</th>
+                    <th className="p-2">Domain</th>
+                    <th className="p-2">Item</th>
+                    <th className="p-2">Result</th>
+                    <th className="p-2">Duration</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {state.activities
+                    .filter((x: any) => x.date === day)
+                    .map((x: any) => (
+                      <tr className="border-b" key={x.id}>
+                        <td className="p-2">{x.date}</td>
+                        <td className="p-2">{x.domain.replaceAll("_", " ")}</td>
+                        <td className="p-2">{x.label}</td>
+                        <td className="p-2">
+                          <Badge>{x.result}</Badge>
+                        </td>
+                        <td className="p-2">
+                          {x.durationMinutes ? `${x.durationMinutes} min` : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+        <div className="lc-panel rounded-xl border bg-white p-4">
+          <label className="block font-semibold">
+            Daily note
+            <textarea
+              defaultValue={log?.note || ""}
+              placeholder="What felt clear? What needs repair?"
+              onBlur={(e) =>
+                dispatch({
+                  type: "DAILY_LOG_SAVE",
+                  payload: {
+                    id: `daily-log-${day}`,
+                    date: day,
+                    note: e.target.value,
+                  },
+                })
+              }
+              className="mt-2 min-h-36 w-full rounded border p-2"
+            />
+          </label>
+          <p className="mt-2 text-sm text-[#657777]">
+            Saved automatically when you leave the field.
+          </p>
+        </div>
+      </section>
+    </>
+  );
+}
+function SystemDesignPage() {
+  const { state } = useAppState();
+  const nav = useNavigate();
+  const chapters = [
+    "Reliable, scalable, maintainable applications",
+    "Data models and query languages",
+    "Storage and retrieval",
+    "Encoding and evolution",
+    "Replication",
+    "Partitioning",
+    "Transactions",
+    "Distributed systems",
+    "Consistency and consensus",
+    "Batch processing",
+    "Stream processing",
+    "The future of data systems",
+  ];
+  return (
+    <>
+      <PageHeader title="System Design" />
+      {domain(state, "System Design", "SYSTEM_DESIGN")}
+      <nav className="app-tabs mb-4" aria-label="System Design tabs">
+        <span className="app-tab app-tab--active" aria-current="page">DDIA</span>
+        <Link className="app-tab" to="/system-design/hello-interview">Hello Interview</Link>
+      </nav>
+      <section className="lc-panel overflow-x-auto rounded-xl border bg-white p-4">
+        <table className="w-full min-w-[680px] text-left text-sm">
+          <thead className="border-b text-xs uppercase tracking-wide text-[#657777]">
+            <tr>
+              <th className="p-2">Chapter</th>
+              <th className="p-2">Title</th>
+              <th className="p-2">Questions</th>
+              <th className="p-2">Passed</th>
+              <th className="p-2">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {chapters.map((title, index) => {
+              const chapter = index + 1;
+              const questions = state.learningItems.filter(
+                (x: any) =>
+                  x.domain === "DDIA" && x.track === `CHAPTER_${chapter}`,
+              );
+              const passed = questions.filter(
+                (x: any) => x.latestResult === "PASS",
+              ).length;
+              return (
+                <tr className="clickable-row border-b" key={chapter} tabIndex={0} role="link" onClick={() => nav(`/system-design/ddia/${chapter}`)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); nav(`/system-design/ddia/${chapter}`); } }}>
+                  <td className="p-2 font-semibold">{chapter}</td>
+                  <td className="p-2">{title}</td>
+                  <td className="p-2">{questions.length}</td>
+                  <td className="p-2">{passed}</td>
+                  <td className="p-2">
+                    <Badge>
+                      {questions.some(
+                        (x: any) =>
+                          x.nextReviewAt && x.nextReviewAt <= localDate(),
+                      )
+                        ? "DUE"
+                        : "IN PROGRESS"}
+                    </Badge>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </section>
+    </>
+  );
+}
+function HelloInterviewPage() {
+  const { state, dispatch } = useAppState();
+  const [title, setTitle] = useState("");
+  return (
+    <>
+      <PageHeader title="System Design" />
+      {domain(state, "System Design", "SYSTEM_DESIGN")}
+      <nav className="app-tabs mb-4" aria-label="System Design tabs">
+        <Link className="app-tab" to="/system-design">DDIA</Link>
+        <span className="app-tab app-tab--active" aria-current="page">Hello Interview</span>
+      </nav>
+      <div className="mb-3 flex items-center justify-between">
+        <h2 className="font-bold">Hello Interview exercises</h2>
+        <form
+          className="flex gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (title) {
+              dispatch({
+                type: "UPSERT",
+                payload: {
+                  collection: "systemDesignTasks",
+                  item: {
+                    id: crypto.randomUUID(),
+                    title,
+                    category: "System design",
+                    status: "NOT_STARTED",
+                    attempts: [],
+                    statement: "",
+                    notes: "",
+                  },
+                },
+              });
+              setTitle("");
+            }
+          }}
+        >
+          <input
+            className="rounded border p-2"
+            placeholder="New exercise"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+          />
+          <button className="rounded bg-[#21675d] px-3 text-white">Add</button>
+        </form>
+      </div>
+      <section className="lc-panel overflow-x-auto rounded-xl border bg-white p-4">
+        <table className="w-full min-w-[620px] text-left text-sm">
+          <thead className="border-b text-xs uppercase tracking-wide text-[#657777]">
+            <tr>
+              <th className="p-2">Title</th>
+              <th className="p-2">Category</th>
+              <th className="p-2">Attempts</th>
+              <th className="p-2">Latest result</th>
+              <th className="p-2">Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            {state.systemDesignTasks.map((task: any) => {
+              const attempt = task.attempts.at(-1);
+              return (
+                <tr className="border-b" key={task.id}>
+                  <td className="p-2">
+                    <Link className="table-link font-semibold" to={`/system-design/hello-interview/${task.id}`}>{task.title}</Link>
+                  </td>
+                  <td className="p-2">{task.category}</td>
+                  <td className="p-2">{task.attempts.length}</td>
+                  <td className="p-2">
+                    {attempt ? <Badge>{attempt.result}</Badge> : "—"}
+                  </td>
+                  <td className="p-2">
+                    <Badge>{task.status}</Badge>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </section>
+    </>
+  );
+}
+function Tasks({ system = false }: { system?: boolean }) {
+  const { state, dispatch } = useAppState(),
+    nav = useNavigate(),
+    params = useParams(),
+    collection = system ? "systemDesignTasks" : "functionalTasks",
+    tasks = system ? state.systemDesignTasks : state.functionalTasks,
+    id = params.id;
+  const [title, setTitle] = useState(""),
+    [editAttempt, setEditAttempt] = useState<string | null>(null);
+  const task = tasks.find((x: any) => x.id === id);
+  if (id) {
+    if (!task)
+      return (
+        <Navigate
+          to={system ? "/system-design/hello-interview" : "/functional-coding"}
+        />
+      );
+    const update = (patch: any) =>
+      dispatch({
+        type: "UPSERT",
+        payload: { collection, item: { ...task, ...patch } },
+      });
+    const detailFields = system
+      ? [
+          ["statement", "Problem statement"], ["functional", "Functional requirements"],
+          ["nonFunctional", "Non-functional requirements"], ["capacity", "Capacity estimates"],
+          ["api", "API design"], ["dataModel", "Data model"], ["highLevel", "High-level design"],
+          ["scaling", "Scaling"], ["consistency", "Consistency"], ["reliability", "Reliability"],
+          ["observability", "Observability"], ["security", "Security"], ["tradeoffs", "Trade-offs"],
+          ["bottlenecks", "Bottlenecks"], ["notes", "Notes"],
+        ]
+      : [
+          ["statement", "Problem statement"], ["requirements", "Functional requirements"],
+          ["nonFunctional", "Non-functional requirements"], ["entities", "Entities"],
+          ["services", "Services"], ["repositories", "Repositories"], ["api", "API design"],
+          ["validation", "Validation"], ["errors", "Error handling"], ["tests", "Test cases"],
+          ["notes", "Design notes"], ["link", "Repository link"], ["improvement", "Next improvement"],
+        ];
+    return (
+      <>
+        <PageHeader title={task.title}>
+          <button
+            onClick={() =>
+              nav(
+                system
+                  ? "/system-design/hello-interview"
+                  : "/functional-coding",
+              )
+            }
+          >
+            ← Back
+          </button>
+        </PageHeader>
+        <section className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,1fr)]">
+          <div className="lc-panel rounded-xl border bg-white p-5">
+            <p className="mb-4 text-sm text-[#657777]">
+              Edit the exercise context and design notes. Changes save when you
+              leave a field.
+            </p>
+            <label className="grid gap-1 font-semibold">
+              Category
+              <input
+                defaultValue={task.category}
+                onBlur={(e) => update({ category: e.target.value })}
+              />
+            </label>
+            {!system && <label className="mt-4 grid gap-1 font-semibold">Tags<input defaultValue={String(task.tags || "")} onBlur={(e) => update({ tags: e.target.value })} /></label>}
+            {detailFields.map(([key, label]) => <label className="mt-4 grid gap-1 font-semibold" key={key}>{label}<textarea className="min-h-28 rounded border p-2" defaultValue={String(task[key] || "")} onBlur={(e) => update({ [key]: e.target.value })} /></label>)}
+            <button
+              className="mt-5 rounded border px-3 py-2 text-[#923d36]"
+              onClick={() =>
+                confirm("Delete this task?") &&
+                dispatch({
+                  type: "DELETE",
+                  payload: { collection, id: task.id },
+                })
+              }
+            >
+              Delete task
+            </button>
+          </div>
+          <aside className="lc-panel rounded-xl border bg-white p-5">
+            <h2 className="font-bold">Attempt history</h2>
+            <p className="mb-3 text-sm text-[#657777]">
+              Keep a concise record of each practice run.
+            </p>
+            {task.attempts.map((a: any) =>
+              editAttempt === a.id ? (
+                <form
+                  key={a.id}
+                  className="my-2 flex flex-wrap gap-2"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const f = new FormData(e.currentTarget);
+                    update({
+                      attempts: task.attempts.map((x: any) =>
+                        x.id === a.id
+                          ? {
+                              ...x,
+                              date: String(f.get("date")),
+                              duration: Number(f.get("duration")),
+                              result: String(f.get("result")),
+                              notes: String(f.get("notes")),
+                            }
+                          : x,
+                      ),
+                    });
+                    setEditAttempt(null);
+                  }}
+                >
+                  <input name="date" type="date" defaultValue={a.date} />
+                  <input
+                    name="duration"
+                    type="number"
+                    defaultValue={a.duration}
+                  />
+                  <select name="result" defaultValue={a.result}>
+                    <option>PASS</option>
+                    <option>PARTIAL</option>
+                    <option>FAIL</option>
+                  </select>
+                  <input name="notes" defaultValue={a.notes} />
+                  <button>Save</button>
+                  <button type="button" onClick={() => setEditAttempt(null)}>
+                    Cancel
+                  </button>
+                </form>
+              ) : (
+                <div className="my-2 flex gap-2" key={a.id}>
+                  <span className="flex-1">
+                    {a.date} · {a.result} · {a.duration} min — {a.notes}
+                  </span>
+                  <button onClick={() => setEditAttempt(a.id)}>Edit</button>
+                  <button
+                    onClick={() =>
+                      confirm("Delete this attempt?") &&
+                      update({
+                        attempts: task.attempts.filter(
+                          (x: any) => x.id !== a.id,
+                        ),
+                      })
+                    }
+                  >
+                    Delete
+                  </button>
+                </div>
+              ),
+            )}
+            <button
+              className="mt-2 rounded bg-[#21675d] px-3 py-2 text-white"
+              onClick={() =>
+                update({
+                  attempts: [
+                    ...task.attempts,
+                    {
+                      id: crypto.randomUUID(),
+                      date: localDate(),
+                      duration: 60,
+                      result: "PARTIAL",
+                      notes: "New attempt",
+                    },
+                  ],
+                })
+              }
+            >
+              Add attempt
+            </button>
+          </aside>
+        </section>
+      </>
+    );
+  }
+  return (
+    <>
+      <PageHeader title={system ? "System Design" : "Functional Coding"} />
+      {domain(
+        state,
+        system ? "System Design" : "Functional Coding",
+        system ? "SYSTEM_DESIGN" : "FUNCTIONAL_CODING",
+      )}
+      <form
+        className="mb-3 flex gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (title) {
+            const item = {
+              id: crypto.randomUUID(),
+              title,
+              category: system ? "System design" : "Backend exercise",
+              status: "NOT_STARTED",
+              attempts: [],
+              statement: "",
+              notes: "",
+            };
+            dispatch({ type: "UPSERT", payload: { collection, item } });
+            setTitle("");
+          }
+        }}
+      >
+        <input
+          className="rounded border p-2"
+          placeholder="New task"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+        />
+        <button className="rounded bg-teal-700 px-3 text-white">
+          Add task
+        </button>
+      </form>
+      <section className="task-table lc-panel overflow-x-auto rounded-xl border bg-white p-4">
+        <table className="w-full min-w-[720px] text-left text-sm">
+          <thead className="border-b text-xs uppercase tracking-wide text-[#657777]">
+            <tr><th className="p-2">Title</th><th className="p-2">Category</th><th className="p-2">Latest attempt</th><th className="p-2">Result</th><th className="p-2">Status</th><th className="p-2">Actions</th></tr>
+          </thead>
+          <tbody>
+            {tasks.map((x: any) => {
+              const attempt = x.attempts.at(-1);
+              const destination = `${system ? "/system-design/hello-interview" : "/functional-coding"}/${x.id}`;
+              return <tr key={x.id}>
+                <td className="p-2"><Link className="table-link font-semibold" to={destination}>{x.title}</Link></td>
+                <td className="p-2">{x.category}</td>
+                <td className="p-2">{attempt?.date || "—"}</td>
+                <td className="p-2">{attempt ? <Badge>{attempt.result}</Badge> : "—"}</td>
+                <td className="p-2"><Badge>{x.status}</Badge></td>
+                <td className="p-2 whitespace-nowrap"><Link className="table-link mr-3" to={destination}>Edit</Link><button className="text-sm text-[#923d36]" onClick={() => confirm("Delete this task and all its attempts?") && dispatch({ type: "DELETE", payload: { collection, id: x.id } })}>Delete</button></td>
+              </tr>;
+            })}
+          </tbody>
+        </table>
+      </section>
+    </>
+  );
+}
+function Motivation() {
+  const { state, dispatch } = useAppState(),
+    [text, setText] = useState(""),
+    [section, setSection] = useState("Benefits of changing jobs"),
+    [editing, setEditing] = useState<string | null>(null),
+    [draft, setDraft] = useState("");
+  const sections = [
+    "Benefits of changing jobs",
+    "Costs of changing jobs",
+    "Benefits of staying",
+    "Costs of staying",
+  ];
+  const add = () => {
+    if (!text.trim()) return;
+    dispatch({
+      type: "UPSERT",
+      payload: {
+        collection: "motivationEntries",
+        item: {
+          id: crypto.randomUUID(),
+          section,
+          text,
+          order: state.motivationEntries.length,
+        },
+      },
+    });
+    setText("");
+  };
+  return (
+    <>
+      <PageHeader title="Motivation" />
+      <p className="mb-4 text-slate-600">
+        Remember why the plan matters, not to shame yourself into working.
+      </p>
+      <form
+        className="mb-4 grid gap-2 rounded-xl border bg-white p-4 sm:grid-cols-[1fr_2fr_auto]"
+        onSubmit={(e) => {
+          e.preventDefault();
+          add();
+        }}
+      >
+        <select value={section} onChange={(e) => setSection(e.target.value)}>
+          {sections.map((x) => (
+            <option key={x}>{x}</option>
+          ))}
+        </select>
+        <input
+          required
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          placeholder="Add an entry"
+          className="rounded border p-2"
+        />
+        <button className="rounded bg-teal-700 px-3 text-white">Add</button>
+      </form>
+      <div className="grid gap-4 md:grid-cols-2">
+        {sections.map((sectionName) => {
+          const entries = state.motivationEntries.filter((entry: any) => entry.section === sectionName).sort((a: any, b: any) => a.order - b.order);
+          return <section className="motivation-list rounded-xl border bg-white p-4" key={sectionName}>
+            <h2 className="mb-2 font-bold">{sectionName}</h2>
+            {entries.length === 0 ? <p className="py-3 text-sm text-[#657777]">No entries yet.</p> : entries.map((x: any) => (
+              <div className="flex items-center gap-2 border-b py-3" key={x.id}>
+                {editing === x.id ? <><input className="flex-1 rounded border p-1" value={draft} onChange={(e) => setDraft(e.target.value)} /><button onClick={() => { dispatch({ type: "UPSERT", payload: { collection: "motivationEntries", item: { ...x, text: draft } } }); setEditing(null); }}>Save</button><button onClick={() => setEditing(null)}>Cancel</button></> : <><span className="flex-1">{x.text}</span><button onClick={() => { setEditing(x.id); setDraft(x.text); }}>Edit</button><button onClick={() => confirm("Delete this entry?") && dispatch({ type: "DELETE", payload: { collection: "motivationEntries", id: x.id } })}>Delete</button></>}
+              </div>
+            ))}
+          </section>;
+        })}
+      </div>
+    </>
+  );
+}
+export default function App() {
+  return (
+    <HashRouter>
+      <Shell>
+        <Routes>
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/motivation" element={<Motivation />} />
+          <Route path="/calendar" element={<CalendarPage />} />
+          <Route path="/behaviour" element={<Questions kind="BEHAVIOUR" />} />
+          <Route path="/java" element={<Questions kind="JAVA_THEORY" />} />
+          <Route path="/dsa" element={<Dsa />} />
+          <Route path="/dsa/:id" element={<DsaDetail />} />
+          <Route path="/functional-coding" element={<Tasks />} />
+          <Route path="/functional-coding/:id" element={<Tasks />} />
+          <Route path="/system-design" element={<SystemDesignPage />} />
+          <Route
+            path="/system-design/ddia/:chapterId"
+            element={<Questions kind="DDIA" />}
+          />
+          <Route
+            path="/system-design/hello-interview"
+            element={<HelloInterviewPage />}
+          />
+          <Route
+            path="/system-design/hello-interview/:id"
+            element={<Tasks system />}
+          />
+        </Routes>
+      </Shell>
+    </HashRouter>
+  );
+}

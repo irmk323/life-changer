@@ -1,5 +1,5 @@
 .m2/
-data/
+/data/
 target/
 .DS_Store
 .env
