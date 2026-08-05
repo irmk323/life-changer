@@ -9,7 +9,7 @@ import {
   useParams,
 } from "react-router";
 import { Calendar, Home, BookOpen, Code2, Network, Brain, Pencil, ArrowUp, ArrowDown, AlarmClock, CalendarDays, CheckCircle2, ClipboardList, Flame, GripVertical, Plus, Sparkles, Target, TrendingUp } from "lucide-react";
-import { useRef, useState, type ElementType } from "react";
+import { useRef, useState, type ElementType, type FormEvent } from "react";
 import {
   DomainProgress,
   PageHeader,
@@ -931,6 +931,7 @@ function Tasks({ system = false }: { system?: boolean }) {
           ["validation", "Validation"], ["errors", "Error handling"], ["tests", "Test cases"],
           ["notes", "Design notes"], ["link", "Repository link"], ["improvement", "Next improvement"],
         ];
+    if (system) return <SystemDesignDetail task={task} update={update} onDelete={() => confirm("Delete this task?") && dispatch({ type: "DELETE", payload: { collection, id: task.id } })} onBack={() => nav("/system-design/hello-interview")} />;
     return (
       <>
         <PageHeader title={task.title}>
@@ -1125,6 +1126,56 @@ function Tasks({ system = false }: { system?: boolean }) {
       </section>
     </>
   );
+}
+
+function SystemDesignDetail({ task, update, onDelete, onBack }: { task: any; update: (patch: any) => void; onDelete: () => void; onBack: () => void }) {
+  const [question, setQuestion] = useState("");
+  const [answer, setAnswer] = useState("");
+  const [attemptOpen, setAttemptOpen] = useState(false);
+  const questions = Array.isArray(task.questions) ? task.questions : [];
+  const attempts = Array.isArray(task.attempts) ? task.attempts : [];
+  const addQuestion = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!question.trim()) return;
+    update({ questions: [...questions, { id: crypto.randomUUID(), question: question.trim(), answer: answer.trim(), createdAt: new Date().toISOString() }] });
+    setQuestion(""); setAnswer("");
+  };
+  const addAttempt = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const result = String(form.get("result"));
+    update({ attempts: [...attempts, { id: crypto.randomUUID(), date: String(form.get("date")), duration: Number(form.get("duration")), result, notes: String(form.get("notes")) }], status: result === "PASS" ? "INTERVIEW_READY" : "RETRY_DUE" });
+    setAttemptOpen(false);
+  };
+  return <>
+    <PageHeader title={task.title}>
+      <button onClick={onBack}>← Back to exercises</button>
+    </PageHeader>
+    <p className="mb-5 text-sm text-[#657777]">{task.category} · Capture what you learned, questions to revisit, and every practice run.</p>
+    <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,.85fr)]">
+      <section className="lc-panel rounded-xl border bg-white p-5">
+        <div className="mb-3 flex items-center justify-between gap-3"><div><h2 className="font-bold">Learning notes</h2><p className="text-sm text-[#657777]">Key decisions, trade-offs, and improvements for next time.</p></div><Badge>{task.status}</Badge></div>
+        <textarea aria-label="Learning notes" className="min-h-72 w-full" defaultValue={String(task.notes || "")} placeholder="For example: clarify requirements first, estimate peak traffic, and explain the cache invalidation strategy…" onBlur={(event) => update({ notes: event.target.value })} />
+      </section>
+      <section className="lc-panel rounded-xl border bg-white p-5">
+        <h2 className="font-bold">Q&amp;A</h2><p className="mb-4 text-sm text-[#657777]">Post questions you want to be able to answer clearly.</p>
+        <form className="grid gap-2" onSubmit={addQuestion}>
+          <label className="grid gap-1 font-semibold">Question<textarea value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="e.g. Why choose a queue here?" required /></label>
+          <label className="grid gap-1 font-semibold">Answer <span className="font-normal text-[#657777]">(optional)</span><textarea value={answer} onChange={(event) => setAnswer(event.target.value)} placeholder="Write the answer when you have it." /></label>
+          <button className="justify-self-start bg-[#21675d] text-white">Post Q&amp;A</button>
+        </form>
+        <div className="mt-5 grid gap-3">
+          {questions.length ? questions.slice().reverse().map((item: any) => <article className="rounded-lg border border-[#d9e3e0] p-3" key={item.id}><div className="flex gap-2"><div className="min-w-0 flex-1"><h3 className="font-semibold">Q. {item.question}</h3>{item.answer ? <p className="mt-2 whitespace-pre-wrap text-sm">A. {item.answer}</p> : <p className="mt-2 text-sm text-[#657777]">Answer not added yet.</p>}</div><button aria-label="Delete question" className="h-fit text-sm text-[#923d36]" onClick={() => update({ questions: questions.filter((question: any) => question.id !== item.id) })}>Delete</button></div></article>) : <p className="rounded-lg bg-[#f0f5f3] p-3 text-sm text-[#657777]">No questions yet. Add the first one above.</p>}
+        </div>
+      </section>
+    </div>
+    <section className="lc-panel mt-4 rounded-xl border bg-white p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-bold">Attempt record</h2><p className="text-sm text-[#657777]">Record the outcome and what to improve after each practice.</p></div><button className="bg-[#21675d] text-white" onClick={() => setAttemptOpen(!attemptOpen)}>{attemptOpen ? "Cancel" : "Record attempt"}</button></div>
+      {attemptOpen && <form className="mt-4 grid gap-3 rounded-lg bg-[#f0f5f3] p-4 md:grid-cols-[150px_120px_130px_minmax(0,1fr)_auto] md:items-end" onSubmit={addAttempt}><label className="grid gap-1 font-semibold">Date<input name="date" type="date" defaultValue={localDate()} required /></label><label className="grid gap-1 font-semibold">Minutes<input name="duration" type="number" min="1" defaultValue="60" required /></label><label className="grid gap-1 font-semibold">Result<select name="result" defaultValue="PARTIAL"><option>PASS</option><option>PARTIAL</option><option>FAIL</option></select></label><label className="grid gap-1 font-semibold">Reflection<input name="notes" placeholder="What went well or needs work?" /></label><button className="bg-[#21675d] text-white">Save</button></form>}
+      <div className="mt-4 grid gap-2">{attempts.length ? attempts.slice().reverse().map((attempt: any) => <article className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-[#d9e3e0] px-3 py-2" key={attempt.id}><span className="font-semibold">{attempt.date}</span><Badge>{attempt.result}</Badge><span className="text-sm text-[#657777]">{attempt.duration} min</span><span className="min-w-48 flex-1 text-sm">{attempt.notes || "No reflection added."}</span><button className="text-sm text-[#923d36]" onClick={() => update({ attempts: attempts.filter((item: any) => item.id !== attempt.id) })}>Delete</button></article>) : <p className="rounded-lg bg-[#f0f5f3] p-3 text-sm text-[#657777]">No attempts recorded yet.</p>}</div>
+    </section>
+    <button className="mt-4 text-sm text-[#923d36]" onClick={onDelete}>Delete exercise</button>
+  </>;
 }
 function Motivation() {
   const { state, dispatch } = useAppState(),

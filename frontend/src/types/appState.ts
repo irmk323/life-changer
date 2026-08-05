@@ -8,5 +8,6 @@ export interface DsaReview {id:string;stage:ReviewStage;dueAt:string;completed:b
 export interface DsaProblem {id:string;title:string;category:string;difficulty:string;leetcodeUrl:string|null;firstSolvedAt:string|null;initialNotes:string;generalNotes:string;reviews:DsaReview[]}
 export interface Priority {id:string;title:string;dueDate:string;priority:PriorityLevel;completed:boolean;order:number;source:'AUTO'|'MANUAL';linkedDomain?:Domain;linkedItemId?:string}
 export interface MotivationEntry {id:string;section:string;text:string;order:number}; export interface DailyLog {id:string;date:string;note:string}
-export interface Task {id:string;title:string;category:string;status:TaskStatus;attempts:{id:string;date:string;duration:number;result:LearningResult;notes:string}[];[key:string]:unknown}
+export interface TaskQuestion {id:string;question:string;answer:string;createdAt:string}
+export interface Task {id:string;title:string;category:string;status:TaskStatus;attempts:{id:string;date:string;duration:number;result:LearningResult;notes:string}[];notes?:string;questions?:TaskQuestion[];[key:string]:unknown}
 export interface AppState {version:number;motivationEntries:MotivationEntry[];learningItems:LearningItem[];attempts:Attempt[];reviews:unknown[];dsa:DsaProblem[];dailyLogs:DailyLog[];activities:Activity[];priorities:Priority[];dismissedAutomaticPriorities:string[];functionalTasks:Task[];systemDesignTasks:Task[]}
