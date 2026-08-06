@@ -1,6 +1,9 @@
 .m2/
+.mvn/
+.claude
 /data/
 target/
 .DS_Store
 .env
 .env.*
+backup

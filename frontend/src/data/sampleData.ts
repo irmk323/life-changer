@@ -4,7 +4,7 @@ import { addDays, localDate } from "../services/readiness/calculations";
 const question = (
   id: string, domain: any, track: string, title: string, category: string,
   result: any = null, next = addDays(3), last = result ? addDays(-2) : null,
-): any => ({ id, domain, track, title, question: title, category, priority: "P1", modelAnswer: `A concise prepared answer for “${title}”. Start with the principle, explain the trade-off, then give a production example.`, personalAnswer: "", notes: "", followUps: "What trade-offs would you discuss?", latestResult: result, lastPractisedAt: last, nextReviewAt: next });
+): any => ({ id, domain, track, title, question: title, category, priority: "P1", modelAnswer: `A concise prepared answer for “${title}”. Start with the principle, explain the trade-off, then give a production example.`, personalAnswer: "", notes: "", followUps: "What trade-offs would you discuss?", latestResult: result, lastPractisedAt: last, nextReviewAt: next, keyPoints: [] });
 const review = (id: string, stage: any, days: number) => ({ id, stage, dueAt: addDays(days), completed: false, completedAt: null, note: "" });
 const functionalTitles = ["Booking API", "Payment Service", "Notification Service", "Inventory Reservation", "Rate Limiter"];
 const designTitles = ["URL Shortener", "Ticket Booking System", "Notification System", "Chat System", "Job Scheduler"];
@@ -29,7 +29,7 @@ export const sampleData = (): AppState => {
     learningItems,
     attempts: [], reviews: [],
     dsa: dsaNames.map((x, i) => ({ id: `dsa-${i + 1}`, title: x[0], category: x[1], difficulty: x[2], leetcodeUrl: `https://leetcode.com/problems/${slug(x[0])}/`, firstSolvedAt: i < 4 ? addDays(-i - 5) : null, initialNotes: "", generalNotes: "", reviews: i < 4 ? [review(`review-${i}-1`, "D1", i === 0 ? -1 : 1), review(`review-${i}-4`, "D4", 4), review(`review-${i}-17`, "D17", 17)] : [] })),
-    dailyLogs: [],
+    dailyLogs: [], weeklyPlanItems: [],
     activities: [{ id: "activity-1", date: localDate(), domain: "JAVA_THEORY", itemId: "java-core-1", label: "equals and hashCode practice", result: "PARTIAL", durationMinutes: 8 }, { id: "activity-2", date: addDays(-1), domain: "BEHAVIOUR", itemId: "behaviour-2", label: "Production incident story", result: "FAIL", durationMinutes: 12 }, { id: "activity-3", date: addDays(-2), domain: "FUNCTIONAL_CODING", itemId: "functional-1", label: "Booking API attempted", result: "PARTIAL", durationMinutes: 75 }],
     priorities: [], dismissedAutomaticPriorities: [],
     functionalTasks: functionalTitles.map((title, i) => ({ id: `functional-${i + 1}`, title, category: "Backend exercise", tags: "Java, API, testing", statement: `Design and implement a small ${title}.`, requirements: "Clear HTTP API and business rules.", nonFunctional: "Validation, observability, testability.", entities: "", services: "", repositories: "", api: "", validation: "", errors: "", tests: "", notes: "", link: "", improvement: "", status: i === 0 ? "LEARNING" : "NOT_STARTED", attempts: i === 0 ? [{ id: "fa-1", date: addDays(-2), duration: 75, result: "PARTIAL" as const, notes: "Core path complete; validation needs work." }] : [] })),
