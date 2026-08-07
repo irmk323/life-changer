@@ -39,6 +39,7 @@ const nav = [
   ["/system-design", "System Design", Network],
   ["/backup", "Backup", Save],
 ] as const;
+const DOMAIN_LABELS: Record<string, string> = { DSA: "DSA", JAVA_THEORY: "Java Theory", BEHAVIOUR: "Behaviour", FUNCTIONAL_CODING: "Functional Coding", SYSTEM_DESIGN: "System Design", DDIA: "DDIA" };
 function Shell({ children }: { children: React.ReactNode }) {
   const { dispatch } = useAppState();
   return (
@@ -101,6 +102,7 @@ function Dashboard() {
       completed: false,
       source: "AUTO",
       order: state.priorities.length + index,
+      linkedDomain: x.domain,
     })),
   ].sort((a: any, b: any) => a.order - b.order);
   const upsert = (item: any) =>
@@ -122,8 +124,9 @@ function Dashboard() {
     }
     dispatch({ type: "PRIORITY_REORDER", payload: { id: target.id, direction } });
   };
-  const priorityDomain = (title: string) => {
-    const value = title.toLowerCase();
+  const priorityDomain = (p: any) => {
+    if (p.linkedDomain) return DOMAIN_LABELS[p.linkedDomain] || p.linkedDomain;
+    const value = String(p.title).toLowerCase();
     if (value.includes("design") || value.includes("url")) return "System Design";
     if (value.includes("java")) return "Java Theory";
     if (value.includes("tree") || value.includes("array") || value.includes("dsa")) return "DSA";
@@ -184,6 +187,7 @@ function Dashboard() {
                     title: String(f.get("title")),
                     dueDate: String(f.get("dueDate")),
                     priority: String(f.get("priority")),
+                    linkedDomain: String(f.get("linkedDomain")),
                   });
                   setEdit(null);
                 }}
@@ -194,6 +198,12 @@ function Dashboard() {
                   <option>HIGH</option>
                   <option>MEDIUM</option>
                   <option>LOW</option>
+                </select>
+                <select name="linkedDomain" defaultValue={p.linkedDomain || ""}>
+                  <option value="">Focus</option>
+                  {Object.entries(DOMAIN_LABELS).map(([value, label]) => (
+                    <option value={value} key={value}>{label}</option>
+                  ))}
                 </select>
                 <button>Save</button>
                 <button type="button" onClick={() => setEdit(null)}>
@@ -227,7 +237,7 @@ function Dashboard() {
                   {p.title}
                 </span>
                 <span className="priority-row__date"><Calendar size={16} /> {p.dueDate === localDate() ? "Today" : p.dueDate}</span>
-                <span className="priority-row__domain">{priorityDomain(p.title)}</span>
+                <span className="priority-row__domain">{priorityDomain(p)}</span>
                 <Badge>{p.priority}</Badge>
                 <button className="icon-button" aria-label={`Edit ${p.title}`} title="Edit" onClick={() => setEdit(p)}><Pencil size={15} /></button>
                 <span className="priority-row__move">
@@ -243,16 +253,24 @@ function Dashboard() {
             onSubmit={(e) => {
               e.preventDefault();
               if (text) {
+                const linkedDomain = String(new FormData(e.currentTarget).get("linkedDomain"));
                 upsert({
                   id: crypto.randomUUID(), title: text, dueDate: localDate(),
                   priority: "MEDIUM", completed: false, source: "MANUAL",
                   order: state.priorities.length,
+                  linkedDomain,
                 });
                 setText("");
               }
             }}
           >
             <input ref={newPriorityInput} value={text} onChange={(e) => setText(e.target.value)} className="flex-1 rounded border p-2" aria-label="New todo" placeholder="Add a priority" />
+            <select name="linkedDomain" defaultValue="" aria-label="Category">
+              <option value="">Focus</option>
+              {Object.entries(DOMAIN_LABELS).map(([value, label]) => (
+                <option value={value} key={value}>{label}</option>
+              ))}
+            </select>
             <button className="dashboard-primary"><Plus size={16} /> Add priority</button>
           </form>
         </section>
@@ -656,12 +674,12 @@ function WeeklyPlan() {
   const weekItems = state.weeklyPlanItems.filter((item: any) => item.date >= activeWeek && item.date <= days[6]);
   const completed = weekItems.filter((item: any) => item.status === "INTERVIEW_READY").length;
   const plannedMinutes = weekItems.reduce((total: number, item: any) => total + Number(item.plannedMinutes || 0), 0);
-  const domainLabels: Record<string, string> = { DSA: "DSA", JAVA_THEORY: "Java Theory", BEHAVIOUR: "Behaviour", FUNCTIONAL_CODING: "Functional Coding", SYSTEM_DESIGN: "System Design", DDIA: "DDIA" };
+  const domainLabels = DOMAIN_LABELS;
   const openNew = (date = activeWeek, planType = "MAIN") => setEditor({ id: "", date, planType, domain: "DSA", title: "", plannedMinutes: 60, status: "NOT_STARTED", notes: "" });
   const save = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const values = new FormData(event.currentTarget);
-    dispatch({ type: "UPSERT", payload: { collection: "weeklyPlanItems", item: { ...editor, id: editor.id || crypto.randomUUID(), date: String(values.get("date")), planType: String(values.get("planType")), domain: editor.planType === "SUB" ? "DDIA" : String(values.get("domain")), title: String(values.get("title")).trim(), plannedMinutes: Number(values.get("plannedMinutes")), status: editor.status || "NOT_STARTED", notes: String(values.get("notes")).trim() } } });
+    dispatch({ type: "UPSERT", payload: { collection: "weeklyPlanItems", item: { ...editor, id: editor.id || crypto.randomUUID(), date: String(values.get("date")), planType: String(values.get("planType")), domain: String(values.get("domain")), title: String(values.get("title")).trim(), plannedMinutes: Number(values.get("plannedMinutes")), status: editor.status || "NOT_STARTED", notes: String(values.get("notes")).trim() } } });
     setEditor(null);
   };
   const formatDay = (date: string) => new Date(`${date}T12:00:00`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
@@ -684,7 +702,8 @@ function WeeklyPlan() {
       <form key={editor.id || editor.date} className="grid gap-3 md:grid-cols-2" onSubmit={save}>
         <label className="grid gap-1 font-semibold">Date<input name="date" type="date" defaultValue={editor.date} required /></label>
         <label className="grid gap-1 font-semibold">Plan type<select name="planType" value={editor.planType} onChange={(event) => setEditor({ ...editor, planType: event.target.value })}><option value="MAIN">Main subject</option><option value="SUB">Sub subject</option></select></label>
-        {editor.planType === "SUB" ? <label className="grid gap-1 font-semibold">Study area<select name="title" defaultValue={["読書", "英単語", "Typing 練習", "その他"].includes(editor.title) ? editor.title : "読書"}><option>読書</option><option>英単語</option><option>Typing 練習</option><option>その他</option></select></label> : <><label className="grid gap-1 font-semibold">Study area<select name="domain" defaultValue={editor.domain}>{Object.entries(domainLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label><label className="grid gap-1 font-semibold md:col-span-2">Study item<input name="title" defaultValue={editor.title} placeholder="e.g. Solve two sliding-window problems" required /></label></>}
+        <label className="grid gap-1 font-semibold">Study area<select name="domain" defaultValue={editor.domain}>{Object.entries(domainLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
+        <label className="grid gap-1 font-semibold md:col-span-2">Study item<input name="title" defaultValue={editor.title} placeholder="e.g. Solve two sliding-window problems" required /></label>
         <label className="grid gap-1 font-semibold">Planned minutes<input name="plannedMinutes" type="number" min="5" step="5" defaultValue={editor.plannedMinutes} required /></label>
         <label className="grid gap-1 font-semibold md:col-span-2">Note <span className="font-normal text-[#657777]">(optional)</span><textarea name="notes" defaultValue={editor.notes} placeholder="What do you want to focus on?" /></label>
         <div className="flex gap-2 md:col-span-2"><button className="bg-[#21675d] text-white">Save item</button><button type="button" onClick={() => setEditor(null)}>Cancel</button></div>
@@ -706,7 +725,7 @@ function WeeklyPlan() {
           </div>)}{mainItems.length === 0 && <p className="rounded-lg bg-[#f0f5f3] p-3 text-sm text-[#657777]">No main subject planned.</p>}</div></section>
             <section><div className="mb-2 flex items-center justify-between"><h3 className="text-xs font-semibold uppercase tracking-wide text-[#657777]">Sub subjects</h3><button className="icon-button" aria-label={`Add sub subject for ${date}`} title="Add sub subject" onClick={() => openNew(date, "SUB")}><Plus size={15} /></button></div>
               <div className="grid gap-2">{subItems.map((item: any) => <div className={`rounded-lg border border-[#d9e3e0] p-3 ${item.status === "INTERVIEW_READY" ? "bg-[#f1f3f2] text-[#657777]" : ""}`} key={item.id}>
-                <div className="flex justify-end"><input aria-label={`Mark ${item.title} as completed`} type="checkbox" checked={item.status === "INTERVIEW_READY"} onChange={(event) => dispatch({ type: "UPSERT", payload: { collection: "weeklyPlanItems", item: { ...item, status: event.target.checked ? "INTERVIEW_READY" : "NOT_STARTED" } } })} /></div>
+                <div className="flex items-start justify-between gap-2"><span className="text-xs font-semibold text-[#21675d]">{domainLabels[item.domain]}</span><input aria-label={`Mark ${item.title} as completed`} type="checkbox" checked={item.status === "INTERVIEW_READY"} onChange={(event) => dispatch({ type: "UPSERT", payload: { collection: "weeklyPlanItems", item: { ...item, status: event.target.checked ? "INTERVIEW_READY" : "NOT_STARTED" } } })} /></div>
                 <h3 className={`mt-2 font-semibold ${item.status === "INTERVIEW_READY" ? "line-through" : ""}`}>{item.title}</h3><p className="mt-1 text-sm text-[#657777]">{item.plannedMinutes} min</p>{item.notes && <p className="mt-2 text-sm text-[#657777]">{item.notes}</p>}
                 <div className="mt-3 flex gap-2"><button className="icon-button" aria-label={`Edit ${item.title}`} title="Edit" onClick={() => setEditor(item)}><Pencil size={15} /></button><button className="icon-button text-[#923d36]" aria-label={`Delete ${item.title}`} title="Delete" onClick={() => confirm("Delete this study item?") && dispatch({ type: "DELETE", payload: { collection: "weeklyPlanItems", id: item.id } })}><Trash2 size={15} /></button></div>
               </div>)}{subItems.length === 0 && <p className="rounded-lg bg-[#f0f5f3] p-3 text-sm text-[#657777]">No sub subjects planned.</p>}</div></section>

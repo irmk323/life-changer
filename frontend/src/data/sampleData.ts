@@ -25,7 +25,7 @@ export const sampleData = (): AppState => {
   ];
   return {
     version: 1,
-    motivationEntries: [["Benefits of changing jobs", "Work on larger-scale distributed systems"], ["Benefits of changing jobs", "Improve compensation and career trajectory"], ["Costs of changing jobs", "Interview preparation takes focused evenings"], ["Benefits of staying", "Keep a familiar team and product context"], ["Costs of staying", "Fewer opportunities to deepen senior-level design skills"]].map((x, i) => ({ id: `motivation-${i}`, section: x[0], text: x[1], order: i })),
+    motivationEntries: [],
     learningItems,
     attempts: [], reviews: [],
     dsa: dsaNames.map((x, i) => ({ id: `dsa-${i + 1}`, title: x[0], category: x[1], difficulty: x[2], leetcodeUrl: `https://leetcode.com/problems/${slug(x[0])}/`, firstSolvedAt: i < 4 ? addDays(-i - 5) : null, initialNotes: "", generalNotes: "", reviews: i < 4 ? [review(`review-${i}-1`, "D1", i === 0 ? -1 : 1), review(`review-${i}-4`, "D4", 4), review(`review-${i}-17`, "D17", 17)] : [] })),
