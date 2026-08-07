@@ -15,6 +15,8 @@ import {
   PageHeader,
   QuestionRow,
   Badge,
+  StatusPicker,
+  STATUS_LABEL,
 } from "./components/common";
 import { Backup } from "./components/Backup";
 import { useAppState } from "./app/AppStateProvider";
@@ -147,7 +149,7 @@ function Dashboard() {
       <header className="dashboard-heading">
         <div>
           <h1>Dashboard</h1>
-          <p>Your daily command center to prepare for a Senior Java Engineer role.</p>
+          <p>Your daily command center to prepare for your next role.</p>
         </div>
         <button className="dashboard-primary" onClick={() => newPriorityInput.current?.focus()}>
           <Plus size={17} /> Add priority
@@ -199,8 +201,7 @@ function Dashboard() {
                   <option>MEDIUM</option>
                   <option>LOW</option>
                 </select>
-                <select name="linkedDomain" defaultValue={p.linkedDomain || ""}>
-                  <option value="">Focus</option>
+                <select name="linkedDomain" defaultValue={p.linkedDomain || Object.keys(DOMAIN_LABELS)[0]}>
                   {Object.entries(DOMAIN_LABELS).map(([value, label]) => (
                     <option value={value} key={value}>{label}</option>
                   ))}
@@ -265,8 +266,7 @@ function Dashboard() {
             }}
           >
             <input ref={newPriorityInput} value={text} onChange={(e) => setText(e.target.value)} className="flex-1 rounded border p-2" aria-label="New priority" placeholder="Add a priority" />
-            <select name="linkedDomain" defaultValue="" aria-label="Category">
-              <option value="">Focus</option>
+            <select name="linkedDomain" defaultValue={Object.keys(DOMAIN_LABELS)[0]} aria-label="Category">
               {Object.entries(DOMAIN_LABELS).map(([value, label]) => (
                 <option value={value} key={value}>{label}</option>
               ))}
@@ -357,6 +357,7 @@ function Dashboard() {
 function Questions({ kind }: { kind: "BEHAVIOUR" | "JAVA_THEORY" | "DDIA" }) {
   const { state, dispatch } = useAppState();
   const { chapterId } = useParams();
+  const nav = useNavigate();
   const [tab, setTab] = useState("CORE_JAVA"),
     [text, setText] = useState("");
   const items = state.learningItems.filter(
@@ -371,10 +372,26 @@ function Questions({ kind }: { kind: "BEHAVIOUR" | "JAVA_THEORY" | "DDIA" }) {
       : kind === "DDIA"
         ? "DDIA"
         : "Behaviour";
+  const chapterKey = kind === "DDIA" ? `CHAPTER_${chapterId || "1"}` : null;
+  const chapterRecord = chapterKey ? state.ddiaChapters.find((c: any) => c.id === chapterKey) : null;
+  const saveChapter = (patch: any) => {
+    if (!chapterKey) return;
+    dispatch({ type: "UPSERT", payload: { collection: "ddiaChapters", item: { id: chapterKey, status: "NOT_STARTED", notes: "", ...chapterRecord, ...patch } } });
+  };
   return (
     <>
-      <PageHeader title={title} />
+      <PageHeader title={title}>
+        {kind === "DDIA" && <button onClick={() => nav("/system-design")}>← Back</button>}
+      </PageHeader>
       {kind !== "DDIA" && domain(state, title, kind)}
+      {kind === "DDIA" && (
+        <StatusPicker
+          title="Have you read this chapter?"
+          value={chapterRecord?.status || "NOT_STARTED"}
+          options={["NOT_STARTED", "IN_PROGRESS", "DONE"]}
+          onChange={(status) => saveChapter({ status })}
+        />
+      )}
       {kind === "JAVA_THEORY" && (
         <div className="app-tabs mb-3" role="tablist" aria-label="Java topic">
           <button className={`app-tab ${tab === "CORE_JAVA" ? "app-tab--active" : ""}`} role="tab" aria-selected={tab === "CORE_JAVA"} onClick={() => setTab("CORE_JAVA")}>Core Java</button>
@@ -434,6 +451,18 @@ function Questions({ kind }: { kind: "BEHAVIOUR" | "JAVA_THEORY" | "DDIA" }) {
           <QuestionRow key={x.id} item={x} java={kind === "JAVA_THEORY"} />
         ))}
       </div>
+      {kind === "DDIA" && (
+        <section className="lc-panel mt-4 rounded-xl border bg-white p-4">
+          <h2 className="font-bold">Learning notes</h2>
+          <p className="mb-2 text-sm text-[#657777]">Key takeaways and things to revisit from this chapter.</p>
+          <textarea
+            className="min-h-40 w-full rounded border p-2"
+            defaultValue={chapterRecord?.notes || ""}
+            placeholder="What stood out in this chapter?"
+            onBlur={(e) => saveChapter({ notes: e.target.value })}
+          />
+        </section>
+      )}
     </>
   );
 }
@@ -932,6 +961,7 @@ function SystemDesignPage() {
               const passed = questions.filter(
                 (x: any) => x.latestResult === "PASS",
               ).length;
+              const chapterStatus = state.ddiaChapters.find((c: any) => c.id === `CHAPTER_${chapter}`)?.status || "NOT_STARTED";
               return (
                 <tr className="clickable-row border-b" key={chapter} tabIndex={0} role="link" onClick={() => nav(`/system-design/ddia/${chapter}`)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); nav(`/system-design/ddia/${chapter}`); } }}>
                   <td className="p-2 font-semibold">{chapter}</td>
@@ -939,14 +969,7 @@ function SystemDesignPage() {
                   <td className="p-2">{questions.length}</td>
                   <td className="p-2">{passed}</td>
                   <td className="p-2">
-                    <Badge>
-                      {questions.some(
-                        (x: any) =>
-                          x.nextReviewAt && x.nextReviewAt <= localDate(),
-                      )
-                        ? "DUE"
-                        : "IN PROGRESS"}
-                    </Badge>
+                    <Badge>{STATUS_LABEL[chapterStatus] || chapterStatus}</Badge>
                   </td>
                 </tr>
               );
@@ -959,6 +982,7 @@ function SystemDesignPage() {
 }
 function HelloInterviewPage() {
   const { state, dispatch } = useAppState();
+  const nav = useNavigate();
   const [title, setTitle] = useState("");
   return (
     <>
@@ -1017,17 +1041,15 @@ function HelloInterviewPage() {
             {state.systemDesignTasks.map((task: any) => {
               const attempt = task.attempts.at(-1);
               return (
-                <tr className="border-b" key={task.id}>
-                  <td className="p-2">
-                    <Link className="table-link font-semibold" to={`/system-design/hello-interview/${task.id}`}>{task.title}</Link>
-                  </td>
+                <tr className="clickable-row border-b" key={task.id} tabIndex={0} role="link" onClick={() => nav(`/system-design/hello-interview/${task.id}`)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); nav(`/system-design/hello-interview/${task.id}`); } }}>
+                  <td className="p-2 font-semibold">{task.title}</td>
                   <td className="p-2">{task.category}</td>
                   <td className="p-2">{task.attempts.length}</td>
                   <td className="p-2">
                     {attempt ? <Badge>{attempt.result}</Badge> : "—"}
                   </td>
                   <td className="p-2">
-                    <Badge>{task.status}</Badge>
+                    <Badge>{STATUS_LABEL[task.status] || task.status}</Badge>
                   </td>
                 </tr>
               );
@@ -1076,7 +1098,7 @@ function Tasks({ system = false }: { system?: boolean }) {
           ["validation", "Validation"], ["errors", "Error handling"], ["tests", "Test cases"],
           ["notes", "Design notes"], ["link", "Repository link"], ["improvement", "Next improvement"],
         ];
-    if (system) return <SystemDesignDetail task={task} update={update} onDelete={() => confirm("Delete this task?") && dispatch({ type: "DELETE", payload: { collection, id: task.id } })} onBack={() => nav("/system-design/hello-interview")} />;
+    if (system) return <SystemDesignDetail task={task} update={update} learningItems={state.learningItems} dispatch={dispatch} onDelete={() => confirm("Delete this task?") && dispatch({ type: "DELETE", payload: { collection, id: task.id } })} onBack={() => nav("/system-design/hello-interview")} />;
     return (
       <>
         <PageHeader title={task.title}>
@@ -1273,23 +1295,34 @@ function Tasks({ system = false }: { system?: boolean }) {
   );
 }
 
-function SystemDesignDetail({ task, update, onDelete, onBack }: { task: any; update: (patch: any) => void; onDelete: () => void; onBack: () => void }) {
-  const [question, setQuestion] = useState("");
-  const [answer, setAnswer] = useState("");
+function SystemDesignDetail({ task, update, onDelete, onBack, learningItems, dispatch }: { task: any; update: (patch: any) => void; onDelete: () => void; onBack: () => void; learningItems: any[]; dispatch: any }) {
+  const [questionText, setQuestionText] = useState("");
   const [attemptOpen, setAttemptOpen] = useState(false);
-  const questions = Array.isArray(task.questions) ? task.questions : [];
   const attempts = Array.isArray(task.attempts) ? task.attempts : [];
+  const questions = learningItems.filter((x: any) => x.domain === "SYSTEM_DESIGN" && x.track === task.id);
   const addQuestion = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!question.trim()) return;
-    update({ questions: [...questions, { id: crypto.randomUUID(), question: question.trim(), answer: answer.trim(), createdAt: new Date().toISOString() }] });
-    setQuestion(""); setAnswer("");
+    if (!questionText.trim()) return;
+    dispatch({
+      type: "UPSERT",
+      payload: {
+        collection: "learningItems",
+        item: {
+          id: crypto.randomUUID(), domain: "SYSTEM_DESIGN", track: task.id,
+          title: questionText, question: questionText, category: task.category,
+          priority: "P1", modelAnswer: "", personalAnswer: "", notes: "",
+          followUps: "", latestResult: null, lastPractisedAt: null,
+          nextReviewAt: null, keyPoints: [],
+        },
+      },
+    });
+    setQuestionText("");
   };
   const addAttempt = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const result = String(form.get("result"));
-    update({ attempts: [...attempts, { id: crypto.randomUUID(), date: String(form.get("date")), duration: Number(form.get("duration")), result, notes: String(form.get("notes")) }], status: result === "PASS" ? "INTERVIEW_READY" : "RETRY_DUE" });
+    update({ attempts: [...attempts, { id: crypto.randomUUID(), date: String(form.get("date")), duration: Number(form.get("duration")), result, notes: String(form.get("notes")) }], status: result === "PASS" ? "INTERVIEW_READY" : "IN_PROGRESS" });
     setAttemptOpen(false);
   };
   return <>
@@ -1297,24 +1330,27 @@ function SystemDesignDetail({ task, update, onDelete, onBack }: { task: any; upd
       <button onClick={onBack}>← Back to exercises</button>
     </PageHeader>
     <p className="mb-5 text-sm text-[#657777]">{task.category} · Capture what you learned, questions to revisit, and every practice run.</p>
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(360px,.85fr)]">
-      <section className="lc-panel rounded-xl border bg-white p-5">
-        <div className="mb-3 flex items-center justify-between gap-3"><div><h2 className="font-bold">Learning notes</h2><p className="text-sm text-[#657777]">Key decisions, trade-offs, and improvements for next time.</p></div><Badge>{task.status}</Badge></div>
-        <textarea aria-label="Learning notes" className="min-h-72 w-full" defaultValue={String(task.notes || "")} placeholder="For example: clarify requirements first, estimate peak traffic, and explain the cache invalidation strategy…" onBlur={(event) => update({ notes: event.target.value })} />
-      </section>
-      <section className="lc-panel rounded-xl border bg-white p-5">
-        <h2 className="font-bold">Q&amp;A</h2><p className="mb-4 text-sm text-[#657777]">Post questions you want to be able to answer clearly.</p>
-        <form className="grid gap-2" onSubmit={addQuestion}>
-          <label className="grid gap-1 font-semibold">Question<textarea value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="e.g. Why choose a queue here?" required /></label>
-          <label className="grid gap-1 font-semibold">Answer <span className="font-normal text-[#657777]">(optional)</span><textarea value={answer} onChange={(event) => setAnswer(event.target.value)} placeholder="Write the answer when you have it." /></label>
-          <button className="justify-self-start bg-[#21675d] text-white">Post Q&amp;A</button>
-        </form>
-        <div className="mt-5 grid gap-3">
-          {questions.length ? questions.slice().reverse().map((item: any) => <article className="rounded-lg border border-[#d9e3e0] p-3" key={item.id}><div className="flex gap-2"><div className="min-w-0 flex-1"><h3 className="font-semibold">Q. {item.question}</h3>{item.answer ? <p className="mt-2 whitespace-pre-wrap text-sm">A. {item.answer}</p> : <p className="mt-2 text-sm text-[#657777]">Answer not added yet.</p>}</div><button aria-label="Delete question" className="h-fit text-sm text-[#923d36]" onClick={() => update({ questions: questions.filter((question: any) => question.id !== item.id) })}>Delete</button></div></article>) : <p className="rounded-lg bg-[#f0f5f3] p-3 text-sm text-[#657777]">No questions yet. Add the first one above.</p>}
-        </div>
-      </section>
-    </div>
-    <section className="lc-panel mt-4 rounded-xl border bg-white p-5">
+    <StatusPicker
+      title="Have you done this mock interview?"
+      value={task.status === "LEARNING" || task.status === "RETRY_DUE" ? "IN_PROGRESS" : task.status || "NOT_STARTED"}
+      options={["NOT_STARTED", "IN_PROGRESS", "INTERVIEW_READY"]}
+      onChange={(status) => update({ status })}
+    />
+    <section className="lc-panel mb-4 rounded-xl border bg-white p-5">
+      <h2 className="font-bold">Questions</h2>
+      <p className="mb-3 text-sm text-[#657777]">Add the questions you want to be ready to answer for this design.</p>
+      <form className="mb-3 flex gap-2" onSubmit={addQuestion}>
+        <input required className="flex-1 rounded border p-2" value={questionText} onChange={(event) => setQuestionText(event.target.value)} placeholder="New interview question" />
+        <button className="rounded bg-teal-700 px-3 text-white">Add question</button>
+      </form>
+      {questions.length ? <div className="question-list grid gap-0">{questions.map((item: any) => <QuestionRow key={item.id} item={item} />)}</div> : <p className="rounded-lg bg-[#f0f5f3] p-3 text-sm text-[#657777]">No questions yet. Add the first one above.</p>}
+    </section>
+    <section className="lc-panel mb-4 rounded-xl border bg-white p-5">
+      <h2 className="font-bold">Learning notes</h2>
+      <p className="mb-3 text-sm text-[#657777]">Key decisions, trade-offs, and improvements for next time.</p>
+      <textarea aria-label="Learning notes" className="min-h-48 w-full" defaultValue={String(task.notes || "")} placeholder="For example: clarify requirements first, estimate peak traffic, and explain the cache invalidation strategy…" onBlur={(event) => update({ notes: event.target.value })} />
+    </section>
+    <section className="lc-panel mb-4 rounded-xl border bg-white p-5">
       <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-bold">Attempt record</h2><p className="text-sm text-[#657777]">Record the outcome and what to improve after each practice.</p></div><button className="bg-[#21675d] text-white" onClick={() => setAttemptOpen(!attemptOpen)}>{attemptOpen ? "Cancel" : "Record attempt"}</button></div>
       {attemptOpen && <form className="mt-4 grid gap-3 rounded-lg bg-[#f0f5f3] p-4 md:grid-cols-[150px_120px_130px_minmax(0,1fr)_auto] md:items-end" onSubmit={addAttempt}><label className="grid gap-1 font-semibold">Date<input name="date" type="date" defaultValue={localDate()} required /></label><label className="grid gap-1 font-semibold">Minutes<input name="duration" type="number" min="1" defaultValue="60" required /></label><label className="grid gap-1 font-semibold">Result<select name="result" defaultValue="PARTIAL"><option>PASS</option><option>PARTIAL</option><option>FAIL</option></select></label><label className="grid gap-1 font-semibold">Reflection<input name="notes" placeholder="What went well or needs work?" /></label><button className="bg-[#21675d] text-white">Save</button></form>}
       <div className="mt-4 grid gap-2">{attempts.length ? attempts.slice().reverse().map((attempt: any) => <article className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border border-[#d9e3e0] px-3 py-2" key={attempt.id}><span className="font-semibold">{attempt.date}</span><Badge>{attempt.result}</Badge><span className="text-sm text-[#657777]">{attempt.duration} min</span><span className="min-w-48 flex-1 text-sm">{attempt.notes || "No reflection added."}</span><button className="text-sm text-[#923d36]" onClick={() => update({ attempts: attempts.filter((item: any) => item.id !== attempt.id) })}>Delete</button></article>) : <p className="rounded-lg bg-[#f0f5f3] p-3 text-sm text-[#657777]">No attempts recorded yet.</p>}</div>

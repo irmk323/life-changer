@@ -6,9 +6,24 @@ import { localDate } from "../services/readiness/calculations";
 
 export const Badge = ({ children, compact = false }: { children: React.ReactNode; compact?: boolean }) => {
   const value = String(children).toUpperCase();
-  const style = value === "PASS" || value === "RETAINED" || value === "INTERVIEW_READY" ? "bg-[#dceee6] text-[#176143]" : value === "PARTIAL" || value === "DUE" || value === "LEARNING" || value === "MEDIUM" ? "bg-[#fff1cf] text-[#765700]" : value === "FAIL" || value === "OVERDUE" || value === "RETRY_DUE" || value === "HIGH" ? "bg-[#f8dfdc] text-[#923d36]" : value === "LOW" ? "bg-[#e5eff5] text-[#285b78]" : "bg-slate-100 text-slate-700";
+  const style = value === "PASS" || value === "RETAINED" || value === "INTERVIEW_READY" || value === "DONE" ? "bg-[#dceee6] text-[#176143]" : value === "PARTIAL" || value === "DUE" || value === "LEARNING" || value === "MEDIUM" || value === "IN PROGRESS" ? "bg-[#fff1cf] text-[#765700]" : value === "FAIL" || value === "OVERDUE" || value === "RETRY_DUE" || value === "HIGH" ? "bg-[#f8dfdc] text-[#923d36]" : value === "LOW" ? "bg-[#e5eff5] text-[#285b78]" : "bg-slate-100 text-slate-700";
   return <span className={`inline-flex ${compact ? "" : "min-w-[5.5rem]"} justify-center rounded-full px-2 py-1 text-xs font-semibold ${style}`}>{children}</span>;
 };
+
+export const STATUS_LABEL: Record<string, string> = { NOT_STARTED: "Not started", IN_PROGRESS: "In progress", LEARNING: "In progress", RETRY_DUE: "In progress", INTERVIEW_READY: "Done", DONE: "Done" };
+
+export const StatusPicker = ({ title, value, options, onChange }: { title: string; value: string; options: readonly string[]; onChange: (value: string) => void }) => (
+  <section className="lc-panel status-panel mb-4 rounded-xl border bg-white p-4">
+    <h2 className="font-bold">{title}</h2>
+    <div className="status-toggle mt-3 flex flex-wrap gap-2">
+      {options.map((option) => (
+        <button type="button" key={option} className={`status-toggle__option ${value === option ? "status-toggle__option--active" : ""}`} onClick={() => onChange(option)}>
+          {STATUS_LABEL[option] || option}
+        </button>
+      ))}
+    </div>
+  </section>
+);
 
 export const PageHeader = ({ title, children }: { title: string; children?: React.ReactNode }) => <header className="mb-5 flex flex-wrap items-start justify-between gap-3"><div><h1 className="text-2xl font-bold text-[#203334]">{title}</h1><p className="text-[#657777]">A steady, practical preparation plan.</p></div>{children}</header>;
 
