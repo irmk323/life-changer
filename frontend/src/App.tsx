@@ -380,9 +380,8 @@ function Questions({ kind }: { kind: "BEHAVIOUR" | "JAVA_THEORY" | "DDIA" }) {
   };
   return (
     <>
-      <PageHeader title={title}>
-        {kind === "DDIA" && <button onClick={() => nav("/system-design")}>← Back</button>}
-      </PageHeader>
+      {kind === "DDIA" && <button className="mb-3" onClick={() => nav("/system-design")}>← Back</button>}
+      <PageHeader title={title} />
       {kind !== "DDIA" && domain(state, title, kind)}
       {kind === "DDIA" && (
         <StatusPicker
@@ -932,10 +931,11 @@ function SystemDesignPage() {
     "Stream processing",
     "The future of data systems",
   ];
+  const chaptersDone = chapters.filter((_, index) => state.ddiaChapters.find((c: any) => c.id === `CHAPTER_${index + 1}`)?.status === "DONE").length;
   return (
     <>
       <PageHeader title="System Design" />
-      {domain(state, "System Design", "SYSTEM_DESIGN")}
+      <DomainProgress name="DDIA" done={chaptersDone} total={chapters.length} />
       <nav className="app-tabs mb-4" aria-label="System Design tabs">
         <span className="app-tab app-tab--active" aria-current="page">DDIA</span>
         <Link className="app-tab" to="/system-design/hello-interview">Hello Interview</Link>
@@ -981,51 +981,16 @@ function SystemDesignPage() {
   );
 }
 function HelloInterviewPage() {
-  const { state, dispatch } = useAppState();
+  const { state } = useAppState();
   const nav = useNavigate();
-  const [title, setTitle] = useState("");
   return (
     <>
       <PageHeader title="System Design" />
-      {domain(state, "System Design", "SYSTEM_DESIGN")}
+      {domain(state, "Hello Interview", "SYSTEM_DESIGN")}
       <nav className="app-tabs mb-4" aria-label="System Design tabs">
         <Link className="app-tab" to="/system-design">DDIA</Link>
         <span className="app-tab app-tab--active" aria-current="page">Hello Interview</span>
       </nav>
-      <div className="mb-3 flex items-center justify-between">
-        <form
-          className="flex gap-2"
-          onSubmit={(e) => {
-            e.preventDefault();
-            if (title) {
-              dispatch({
-                type: "UPSERT",
-                payload: {
-                  collection: "systemDesignTasks",
-                  item: {
-                    id: crypto.randomUUID(),
-                    title,
-                    category: "System design",
-                    status: "NOT_STARTED",
-                    attempts: [],
-                    statement: "",
-                    notes: "",
-                  },
-                },
-              });
-              setTitle("");
-            }
-          }}
-        >
-          <input
-            className="rounded border p-2"
-            placeholder="New exercise"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-          />
-          <button className="rounded bg-[#21675d] px-3 text-white">Add</button>
-        </form>
-      </div>
       <section className="lc-panel overflow-x-auto rounded-xl border bg-white p-4">
         <table className="w-full min-w-[620px] text-left text-sm">
           <thead className="border-b text-xs uppercase tracking-wide text-[#657777]">
@@ -1326,9 +1291,8 @@ function SystemDesignDetail({ task, update, onDelete, onBack, learningItems, dis
     setAttemptOpen(false);
   };
   return <>
-    <PageHeader title={task.title}>
-      <button onClick={onBack}>← Back to exercises</button>
-    </PageHeader>
+    <button className="mb-3" onClick={onBack}>← Back to exercises</button>
+    <PageHeader title={task.title} />
     <p className="mb-5 text-sm text-[#657777]">{task.category} · Capture what you learned, questions to revisit, and every practice run.</p>
     <StatusPicker
       title="Have you done this mock interview?"
