@@ -2,6 +2,7 @@
   {
     "title": "How does dependency injection work?",
     "category": "Dependency injection",
+    "modelAnswer": "Spring's IoC container owns object creation and wiring instead of classes calling new on their collaborators, which inverts control and decouples components from their concrete dependencies. I prefer constructor injection over field injection: it makes dependencies explicit and required, lets fields be final for immutability, and makes the class trivially testable without reflection or a Spring context. Beans are resolved primarily by type, and when multiple candidates implement the same interface I disambiguate with @Qualifier or mark a default with @Primary. The overall payoff is looser coupling between components and much easier mocking in unit tests.",
     "keyPoints": [
       "IoC container manages object creation and wiring instead of manual new",
       "Constructor injection preferred over field injection for immutability and testability",
@@ -12,6 +13,7 @@
   {
     "title": "Explain the bean lifecycle",
     "category": "Bean lifecycle",
+    "modelAnswer": "The container instantiates the bean, populates its properties/dependencies, then invokes any Aware interfaces (like ApplicationContextAware) so the bean can access container internals, followed by init callbacks. @PostConstruct (or the InitializingBean afterPropertiesSet method) runs after dependencies are set but before the bean is handed out for use, so it's the right place for setup that needs those dependencies. @PreDestroy runs during container shutdown for cleanup like closing connections. Scope changes the lifecycle shape: singleton (the default) is created once per container and reused, while prototype creates a new instance per request and Spring doesn't manage its destruction after handing it out.",
     "keyPoints": [
       "Instantiate, populate properties, apply Aware interfaces, then init callbacks",
       "@PostConstruct / afterPropertiesSet run before the bean is ready for use",
@@ -22,6 +24,7 @@
   {
     "title": "How do you manage configuration?",
     "category": "Configuration",
+    "modelAnswer": "I externalize configuration into application.yml/properties and use Spring profiles to vary it per environment (dev, staging, prod) rather than branching on environment in code. For structured config I bind it to a typed, validated class with @ConfigurationProperties, which fails fast on startup if something's misconfigured; @Value is fine for a single one-off property but doesn't scale to a whole config block. In deployed environments, environment variables or a config server (e.g. Spring Cloud Config, Vault) override the packaged defaults so secrets and per-environment values never live in the repo.",
     "keyPoints": [
       "Externalize config via application.yml/properties with profiles (dev/prod)",
       "@ConfigurationProperties for typed, validated config binding",
@@ -32,6 +35,7 @@
   {
     "title": "How should REST controllers be structured?",
     "category": "REST controllers",
+    "modelAnswer": "Controllers should stay thin — parse the request, delegate to the service layer for business logic, and shape the response, not contain domain logic themselves. That keeps business rules testable without HTTP scaffolding and reusable outside the web layer. I use the correct HTTP verbs and status codes (201 for creation, 404 vs 400 vs 409 appropriately) instead of always returning 200 with an error in the body. DTOs go in and out of the controller rather than JPA entities, so the API contract doesn't leak persistence details or accidentally serialize lazy associations. And I plan a versioning strategy (URI or header-based) up front so breaking changes don't strand existing clients.",
     "keyPoints": [
       "Keep controllers thin, delegate business logic to the service layer",
       "Use proper HTTP verbs/status codes",
@@ -42,6 +46,7 @@
   {
     "title": "How do you validate requests?",
     "category": "Validation",
+    "modelAnswer": "I annotate DTO fields with Bean Validation constraints like @NotNull, @Size, and @Email, and trigger validation on controller parameters with @Valid or @Validated. For rules that don't fit a stock annotation — cross-field checks, domain-specific formats — I write a custom ConstraintValidator so the rule still lives declaratively on the DTO. Validation failures throw MethodArgumentNotValidException, which I handle centrally via an @ExceptionHandler (usually in an @ControllerAdvice) so every endpoint returns a consistent, structured 400 response instead of each controller handling it ad hoc.",
     "keyPoints": [
       "Bean Validation annotations (@NotNull, @Size, @Email) on DTOs",
       "@Valid/@Validated on controller parameters triggers validation",
@@ -52,6 +57,7 @@
   {
     "title": "How do you handle API exceptions?",
     "category": "Exception handling",
+    "modelAnswer": "I centralize exception handling with @ControllerAdvice plus @ExceptionHandler methods so every controller gets consistent error responses instead of duplicating try/catch everywhere. Each exception type maps to an appropriate HTTP status and a structured error body (error code, message, maybe a trace id), and I make sure stack traces or internal details never leak to the client in that response. I model a custom exception hierarchy for domain-specific failures (e.g. ResourceNotFoundException, ConflictException) so the mapping from exception type to status code stays explicit and easy to extend rather than relying on generic RuntimeExceptions.",
     "keyPoints": [
       "@ControllerAdvice + @ExceptionHandler for centralized error handling",
       "Map exceptions to appropriate HTTP status codes and a structured error response",
@@ -62,6 +68,7 @@
   {
     "title": "How does Spring Data derive queries?",
     "category": "Spring Data",
+    "modelAnswer": "Spring Data parses the method name itself — findByStatusAndCreatedAtAfter, for example — and builds the corresponding query from the parts after By, so a repository interface extending JpaRepository or CrudRepository needs no implementation at all for common lookups. When a query is too complex or specific for name derivation to express cleanly, I drop down to @Query with JPQL or native SQL on the method instead of forcing an unreadable method name. Paging and sorting are handled by accepting a Pageable parameter, which Spring Data translates into LIMIT/OFFSET and ORDER BY automatically and returns as a Page<T>.",
     "keyPoints": [
       "Method name parsing (findByXAndY) generates queries automatically",
       "@Query for custom JPQL/SQL when method-name derivation isn't enough",
@@ -72,6 +79,7 @@
   {
     "title": "What does @Transactional do?",
     "category": "Transactions",
+    "modelAnswer": "@Transactional wraps a method's database work in a single transaction and commits it at the end if the method completes normally. By default it only rolls back on unchecked (runtime) exceptions, not checked ones, which trips people up if they expect a checked exception to trigger a rollback — that needs an explicit rollbackFor. Propagation settings control how nested transactional calls behave: REQUIRED joins an existing transaction if one exists, REQUIRES_NEW suspends it and starts a fresh one, and so on. It's implemented via a proxy around the bean, so calling a @Transactional method from another method in the same class (self-invocation) bypasses the proxy entirely and the annotation is silently ignored.",
     "keyPoints": [
       "Wraps a method in a database transaction, commits on success",
       "Rolls back by default on unchecked/runtime exceptions only",
@@ -82,6 +90,7 @@
   {
     "title": "How do you secure an API?",
     "category": "Security",
+    "modelAnswer": "Spring Security sits in front of the app as a filter chain that intercepts every request for authentication and authorization before it reaches the controller. For a stateless REST API I use JWT or OAuth2 tokens rather than server-side sessions, since sessions don't scale well across stateless, horizontally-scaled instances. On top of the coarse filter-chain rules, I add method-level security with @PreAuthorize or @Secured where authorization depends on the specific resource being accessed, not just the URL pattern. CORS and CSRF configuration differ by client type: CSRF protection matters for browser/form-based clients using cookies, but is typically disabled for token-based stateless APIs where CSRF isn't the relevant threat.",
     "keyPoints": [
       "Spring Security filter chain intercepts requests for authentication/authorization",
       "Stateless APIs typically use JWT/OAuth2 tokens instead of sessions",
@@ -92,6 +101,7 @@
   {
     "title": "How do you test a Spring Boot service?",
     "category": "Testing",
+    "modelAnswer": "I default to plain Mockito unit tests for business logic since they run fast and don't need a Spring context at all. When I need to test the web layer, @WebMvcTest loads just the controller slice with MockMvc to verify request/response handling, status codes, and serialization without booting the full app. @SpringBootTest is reserved for true integration tests that need the full wired context, and within those I use @MockBean to stub out external dependencies I don't want hitting real infrastructure. For anything that needs a real database to be meaningful, I use Testcontainers rather than an in-memory substitute like H2, since H2's SQL dialect and behavior can diverge from production and mask real bugs.",
     "keyPoints": [
       "@SpringBootTest for full context integration tests, @WebMvcTest for a controller slice",
       "Mock dependencies with @MockBean, verify HTTP layer with MockMvc",

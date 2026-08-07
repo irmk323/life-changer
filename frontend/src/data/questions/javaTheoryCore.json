@@ -2,6 +2,7 @@
   {
     "title": "How do equals and hashCode work together?",
     "category": "equals and hashCode",
+    "modelAnswer": "The contract says equal objects must produce the same hashCode, though unequal objects may collide. Hash-based collections like HashMap and HashSet use hashCode to pick a bucket and equals to confirm identity within that bucket, so overriding one without the other breaks lookups: an object can hash to the right bucket but fail equals, or two 'equal' objects can land in different buckets and never be found as duplicates. equals itself must be reflexive, symmetric, transitive, and consistent, and I use Objects.equals/Objects.hash so nulls don't blow up the implementation.",
     "keyPoints": [
       "Equal objects must return the same hashCode (the contract)",
       "Overriding equals without hashCode breaks HashMap/HashSet lookups",
@@ -12,6 +13,7 @@
   {
     "title": "What makes an object immutable?",
     "category": "Immutability",
+    "modelAnswer": "An immutable object can't change state after construction: every field is private and final, set only in the constructor, and there are no setters or other mutating methods. If a field holds a mutable type like an array, Date, or a collection, the constructor and any getter must defensively copy it, otherwise a caller can reach in and mutate 'immutable' state through the reference. Making the class itself final (or otherwise preventing subclassing) protects invariants a subclass could otherwise violate. The payoff is thread safety without synchronization and objects that are safe to share and use as map keys.",
     "keyPoints": [
       "All fields private and final, set only in the constructor",
       "No setters or other mutating methods",
@@ -23,6 +25,7 @@
   {
     "title": "Explain HashMap internals",
     "category": "Collections",
+    "modelAnswer": "A HashMap is backed by an array of buckets, each holding a Node<K,V>. On put, the key's hashCode is spread through a supplemental hash function to reduce clustering, then masked to an index. Collisions in a bucket are chained in a linked list, and since Java 8 a bucket with 8+ entries treeifies into a red-black tree so worst-case lookup is O(log n) instead of O(n). Once the size exceeds capacity * load factor (default 0.75), the table resizes — doubling capacity and rehashing every entry, which is the main cost driver for large maps. It's not thread-safe, so concurrent access needs ConcurrentHashMap rather than external locking on a plain HashMap.",
     "keyPoints": [
       "Backed by an array of buckets (Node<K,V>[])",
       "hash() spreads bits to reduce collisions",
@@ -34,6 +37,7 @@
   {
     "title": "When would you use Optional?",
     "category": "Exceptions",
+    "modelAnswer": "Optional is for a return type that communicates 'this might legitimately have no value' so callers can't forget to handle absence the way they could with null. I use it as a method return type, and chain map/filter/orElse rather than calling isPresent() followed by get(), which just reintroduces the null-check pattern Optional was meant to replace. I avoid it for fields, method parameters, and anything that needs to be serialized, since it adds wrapping overhead and isn't designed for that role, and I never call get() without confirming presence first.",
     "keyPoints": [
       "Represents a possibly-absent return value, avoids null checks",
       "Avoid using Optional for fields, parameters, or serialization",
@@ -44,6 +48,7 @@
   {
     "title": "How do Java generics work?",
     "category": "Generics",
+    "modelAnswer": "Generics are a compile-time-only feature: type erasure strips the generic type information at compile time and replaces it with the bound (or Object if unbounded), so at runtime a List<String> and a List<Integer> are the same List. Bounded types (extends/super) restrict what type parameters are allowed and let you call methods on them. For wildcards, I use PECS — producer extends, consumer super — so a method reading from a structure takes ? extends T and one writing to it takes ? super T. Because the runtime doesn't enforce generics, you can't create a generic array directly, and unsafe casts trigger unchecked warnings rather than compile errors.",
     "keyPoints": [
       "Type erasure removes generic type info at runtime, replaced with bounds or Object",
       "Bounded types (extends/super) restrict allowed type parameters",
@@ -55,6 +60,7 @@
   {
     "title": "How do streams differ from collections?",
     "category": "Streams",
+    "modelAnswer": "A collection is a data structure that stores elements in memory; a stream describes a computation pipeline over a source and stores nothing itself. Intermediate operations like filter and map are lazy — they just build up the pipeline and don't run until a terminal operation like collect or forEach triggers evaluation, which lets the JVM fuse operations and short-circuit when possible. Because streams are lazy and pull-based, they can represent infinite sequences, unlike collections which are always finite and fully materialized. A stream can only be consumed once; reusing a consumed stream throws IllegalStateException, so if I need to iterate twice I go back to the source collection.",
     "keyPoints": [
       "Streams describe a computation pipeline, not a data structure",
       "Streams are lazy: intermediate ops (filter/map) don't run until a terminal op",
@@ -65,6 +71,7 @@
   {
     "title": "Explain CompletableFuture",
     "category": "Concurrency",
+    "modelAnswer": "CompletableFuture represents the eventual result of an async computation and, unlike a plain Future, supports composition instead of just blocking on get(). thenApply/thenCompose chain transformations onto the result, thenCombine merges two independent futures, and allOf/anyOf wait on collections of futures. exceptionally and handle let me deal with failures asynchronously instead of wrapping get() in try/catch. By default the callbacks run on ForkJoinPool.commonPool unless I pass an explicit Executor, which matters if the work is blocking and would starve that shared pool. Overall it replaces blocking Future.get() calls and nested callback-hell with a readable, composable pipeline.",
     "keyPoints": [
       "Represents the result of an async computation, supports composition",
       "thenApply/thenCompose chain transformations; thenCombine/allOf/anyOf combine futures",
@@ -76,6 +83,7 @@
   {
     "title": "What lives on the JVM heap?",
     "category": "JVM memory",
+    "modelAnswer": "All objects and arrays live on the heap, including an object's instance fields, no matter where the reference to that object is declared. Local variables and method call frames live on the thread's stack, not the heap — a stack frame just holds a reference (pointer) into the heap. The heap itself is generational: a young generation split into eden and survivor spaces for new, short-lived objects, and an old generation for objects that survive enough collections. Class metadata, like method bytecode and the constant pool, moved out of the heap into metaspace (native memory) in Java 8, replacing the old fixed-size PermGen.",
     "keyPoints": [
       "Objects and arrays live on the heap; instance variables included",
       "Heap is split into young generation (eden, survivor) and old generation",
@@ -86,6 +94,7 @@
   {
     "title": "How does garbage collection work?",
     "category": "Garbage collection",
+    "modelAnswer": "GC works by mark-and-sweep: it traces reachability from a set of GC roots (stack references, static fields, active threads) and reclaims everything that isn't reachable, rather than doing reference counting. It relies on the generational hypothesis — most objects die young — so the young generation is collected frequently and cheaply (minor GC), while the old generation, holding long-lived survivors, is collected far less often but at higher cost (major/full GC), since it involves scanning much more live data. Collectors like Parallel, G1, and ZGC make different trade-offs between pause time and throughput, which is why choosing one matters for latency-sensitive services. finalize() is deprecated because it's unpredictable and can resurrect objects; try-with-resources or Cleaner are the correct way to release non-memory resources deterministically.",
     "keyPoints": [
       "Mark-and-sweep: find objects reachable from GC roots, reclaim the rest",
       "Generational hypothesis: most objects die young, so young gen is collected frequently",
@@ -97,6 +106,7 @@
   {
     "title": "How do you test concurrent code?",
     "category": "Testing",
+    "modelAnswer": "I coordinate threads deterministically with CountDownLatch or CyclicBarrier instead of Thread.sleep, which is timing-dependent and either flaky or masks races by giving threads too much slack. I stress test with many iterations and thread counts to increase the odds a race surfaces, since concurrency bugs are often probabilistic and won't show up on a single run. I test for two separate properties: correctness (no data races or corrupted shared state, often checked with assertions plus tools like thread sanitizers) and liveness (no deadlocks or starvation, usually verified with timeouts around the awaited condition).",
     "keyPoints": [
       "Use CountDownLatch/CyclicBarrier to coordinate threads deterministically",
       "Stress test with many iterations/thread counts to surface race conditions",
