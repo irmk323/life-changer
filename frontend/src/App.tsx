@@ -969,7 +969,6 @@ function HelloInterviewPage() {
         <span className="app-tab app-tab--active" aria-current="page">Hello Interview</span>
       </nav>
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="font-bold">Hello Interview exercises</h2>
         <form
           className="flex gap-2"
           onSubmit={(e) => {

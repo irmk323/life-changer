@@ -1,0 +1,12 @@
+[
+  { "title": "How do equals and hashCode work together?", "category": "equals and hashCode" },
+  { "title": "What makes an object immutable?", "category": "Immutability" },
+  { "title": "Explain HashMap internals", "category": "Collections" },
+  { "title": "When would you use Optional?", "category": "Exceptions" },
+  { "title": "How do Java generics work?", "category": "Generics" },
+  { "title": "How do streams differ from collections?", "category": "Streams" },
+  { "title": "Explain CompletableFuture", "category": "Concurrency" },
+  { "title": "What lives on the JVM heap?", "category": "JVM memory" },
+  { "title": "How does garbage collection work?", "category": "Garbage collection" },
+  { "title": "How do you test concurrent code?", "category": "Testing" }
+]

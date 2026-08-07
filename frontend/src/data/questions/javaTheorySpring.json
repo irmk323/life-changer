@@ -1,0 +1,12 @@
+[
+  { "title": "How does dependency injection work?", "category": "Dependency injection" },
+  { "title": "Explain the bean lifecycle", "category": "Bean lifecycle" },
+  { "title": "How do you manage configuration?", "category": "Configuration" },
+  { "title": "How should REST controllers be structured?", "category": "REST controllers" },
+  { "title": "How do you validate requests?", "category": "Validation" },
+  { "title": "How do you handle API exceptions?", "category": "Exception handling" },
+  { "title": "How does Spring Data derive queries?", "category": "Spring Data" },
+  { "title": "What does @Transactional do?", "category": "Transactions" },
+  { "title": "How do you secure an API?", "category": "Security" },
+  { "title": "How do you test a Spring Boot service?", "category": "Testing" }
+]
