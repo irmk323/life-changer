@@ -31,8 +31,6 @@ table{border-collapse:collapse}table th,table td{border-bottom:1px solid var(--l
 .leaderboard-podium-card__name{margin-top:.15rem;font-weight:700;color:var(--lc-ink)}
 .leaderboard-podium-card__pct{margin:.35rem 0 .1rem;font-size:2.1rem;font-weight:800;color:var(--lc-ink)}
 .leaderboard-podium-card__sub{color:#657777;font-size:.78rem}
-.leaderboard-podium-card__bar{margin-top:.75rem;height:.4rem;border-radius:999px;background:#e5e9e9}
-.leaderboard-podium-card__bar>div{height:100%;border-radius:999px;background:var(--lc-accent)}
 .leaderboard-podium-card__footer{margin-top:.65rem;font-size:.78rem;color:#657777}
 .leaderboard-podium-card__footer--leading{display:inline-flex;align-items:center;gap:.3rem;color:var(--lc-accent);font-weight:700}
 .leaderboard-ranking-row{display:grid;grid-template-columns:2.1rem minmax(120px,1fr) minmax(0,3fr) auto auto;align-items:center;gap:.85rem;padding:.7rem 0;border-bottom:1px solid var(--lc-line)}

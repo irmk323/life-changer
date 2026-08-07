@@ -1086,7 +1086,6 @@ function LeaderboardPage() {
               </div>
               <div className="leaderboard-podium-card__pct">{u.percentage}%</div>
               <div className="leaderboard-podium-card__sub">{u.done} / {u.total} {activeDomain.unit}</div>
-              <div className="leaderboard-podium-card__bar"><div style={{ width: `${u.percentage}%` }} /></div>
               <div className="leaderboard-podium-card__footer">
                 {isLeader ? (
                   <span className="leaderboard-podium-card__footer--leading"><Crown size={14} /> Leading</span>
