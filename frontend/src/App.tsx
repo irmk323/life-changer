@@ -64,7 +64,7 @@ function Shell({ children }: { children: React.ReactNode }) {
         <button
           className="mt-auto w-full rounded border border-[#6f9790] px-3 py-2 text-sm text-[#dce9e6] hover:bg-[#24514c]"
           onClick={() =>
-            confirm("Reset React prototype data to the sample data?") &&
+            confirm("Reset all data to the sample data?") &&
             dispatch({ type: "REPLACE", payload: sampleData() })
           }
         >
@@ -139,7 +139,7 @@ function Dashboard() {
     { label: "Reviews due today", value: dueToday, Icon: ClipboardList, description: dueToday ? "Keep the review loop moving" : "All caught up for today" },
     { label: "Overdue reviews", value: overdue, Icon: AlarmClock, description: overdue ? "Clear these first" : "Nothing is waiting" },
     { label: "Weekly sessions", value: state.activities.length, Icon: CalendarDays, description: "Goal: 6 focused sessions" },
-    { label: "Retention", value: "Prototype", Icon: TrendingUp, description: "Track this as you practise" },
+    { label: "Retention", value: "Coming soon", Icon: TrendingUp, description: "Track this as you practise" },
     { label: "Study streak", value: `${s.current} days`, Icon: Flame, description: `Longest: ${s.longest} days` },
   ];
   return (
@@ -264,7 +264,7 @@ function Dashboard() {
               }
             }}
           >
-            <input ref={newPriorityInput} value={text} onChange={(e) => setText(e.target.value)} className="flex-1 rounded border p-2" aria-label="New todo" placeholder="Add a priority" />
+            <input ref={newPriorityInput} value={text} onChange={(e) => setText(e.target.value)} className="flex-1 rounded border p-2" aria-label="New priority" placeholder="Add a priority" />
             <select name="linkedDomain" defaultValue="" aria-label="Category">
               <option value="">Focus</option>
               {Object.entries(DOMAIN_LABELS).map(([value, label]) => (
@@ -685,7 +685,7 @@ function WeeklyPlan() {
       <div className="mb-3 flex items-center justify-between"><h2 className="font-bold">{editor.id ? "Edit study item" : "Add study item"}</h2><button onClick={() => setEditor(null)}>Cancel</button></div>
       <form key={editor.id || editor.date} className="grid gap-3 md:grid-cols-2" onSubmit={save}>
         <label className="grid gap-1 font-semibold">Date<input name="date" type="date" defaultValue={editor.date} required /></label>
-        <label className="grid gap-1 font-semibold">Plan type<select name="planType" value={editor.planType} onChange={(event) => setEditor({ ...editor, planType: event.target.value })}><option value="MAIN">Main subject</option><option value="SUB">Sub subject</option></select></label>
+        <label className="grid gap-1 font-semibold">Plan type<select name="planType" value={editor.planType} onChange={(event) => setEditor({ ...editor, planType: event.target.value })}><option value="MAIN">Main subject</option><option value="SUB">Secondary subject</option></select></label>
         <label className="grid gap-1 font-semibold">Study area<select name="domain" defaultValue={editor.domain}>{Object.entries(domainLabels).map(([value, label]) => <option value={value} key={value}>{label}</option>)}</select></label>
         <label className="grid gap-1 font-semibold md:col-span-2">Study item<input name="title" defaultValue={editor.title} placeholder="e.g. Solve two sliding-window problems" required /></label>
         <label className="grid gap-1 font-semibold">Planned minutes<input name="plannedMinutes" type="number" min="5" step="5" defaultValue={editor.plannedMinutes} required /></label>
@@ -707,12 +707,12 @@ function WeeklyPlan() {
             <h3 className={`mt-2 font-semibold ${item.status === "INTERVIEW_READY" ? "line-through" : ""}`}>{item.title}</h3><p className="mt-1 text-sm text-[#657777]">{item.plannedMinutes} min</p>{item.notes && <p className="mt-2 text-sm text-[#657777]">{item.notes}</p>}
             <div className="mt-3 flex gap-2"><button className="icon-button" aria-label={`Edit ${item.title}`} title="Edit" onClick={() => setEditor(item)}><Pencil size={15} /></button><button className="icon-button text-[#923d36]" aria-label={`Delete ${item.title}`} title="Delete" onClick={() => confirm("Delete this study item?") && dispatch({ type: "DELETE", payload: { collection: "weeklyPlanItems", id: item.id } })}><Trash2 size={15} /></button></div>
           </div>)}{mainItems.length === 0 && <p className="rounded-lg bg-[#f0f5f3] p-3 text-sm text-[#657777]">No main subject planned.</p>}</div></section>
-            <section><div className="mb-2 flex items-center justify-between"><h3 className="text-xs font-semibold uppercase tracking-wide text-[#657777]">Sub subjects</h3><button className="icon-button" aria-label={`Add sub subject for ${date}`} title="Add sub subject" onClick={() => openNew(date, "SUB")}><Plus size={15} /></button></div>
+            <section><div className="mb-2 flex items-center justify-between"><h3 className="text-xs font-semibold uppercase tracking-wide text-[#657777]">Secondary subjects</h3><button className="icon-button" aria-label={`Add secondary subject for ${date}`} title="Add secondary subject" onClick={() => openNew(date, "SUB")}><Plus size={15} /></button></div>
               <div className="grid gap-2">{subItems.map((item: any) => <div className={`rounded-lg border border-[#d9e3e0] p-3 ${item.status === "INTERVIEW_READY" ? "bg-[#f1f3f2] text-[#657777]" : ""}`} key={item.id}>
                 <div className="flex items-start justify-between gap-2"><span className="text-xs font-semibold text-[#21675d]">{domainLabels[item.domain]}</span><input aria-label={`Mark ${item.title} as completed`} type="checkbox" checked={item.status === "INTERVIEW_READY"} onChange={(event) => dispatch({ type: "UPSERT", payload: { collection: "weeklyPlanItems", item: { ...item, status: event.target.checked ? "INTERVIEW_READY" : "NOT_STARTED" } } })} /></div>
                 <h3 className={`mt-2 font-semibold ${item.status === "INTERVIEW_READY" ? "line-through" : ""}`}>{item.title}</h3><p className="mt-1 text-sm text-[#657777]">{item.plannedMinutes} min</p>{item.notes && <p className="mt-2 text-sm text-[#657777]">{item.notes}</p>}
                 <div className="mt-3 flex gap-2"><button className="icon-button" aria-label={`Edit ${item.title}`} title="Edit" onClick={() => setEditor(item)}><Pencil size={15} /></button><button className="icon-button text-[#923d36]" aria-label={`Delete ${item.title}`} title="Delete" onClick={() => confirm("Delete this study item?") && dispatch({ type: "DELETE", payload: { collection: "weeklyPlanItems", id: item.id } })}><Trash2 size={15} /></button></div>
-              </div>)}{subItems.length === 0 && <p className="rounded-lg bg-[#f0f5f3] p-3 text-sm text-[#657777]">No sub subjects planned.</p>}</div></section>
+              </div>)}{subItems.length === 0 && <p className="rounded-lg bg-[#f0f5f3] p-3 text-sm text-[#657777]">No secondary subjects planned.</p>}</div></section>
           </div>
         </article>;
       })}
@@ -1354,7 +1354,7 @@ function Motivation() {
     <>
       <PageHeader title="Motivation" />
       <p className="mb-4 text-slate-600">
-        Remember why the plan matters, not to shame yourself into working.
+        This is a reminder of why the plan matters, not a way to guilt yourself into working.
       </p>
       <form
         className="mb-4 grid gap-2 rounded-xl border bg-white p-4 sm:grid-cols-[1fr_2fr_auto]"
