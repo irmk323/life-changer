@@ -42,6 +42,20 @@ const nav = [
   ["/backup", "Backup", Save],
 ] as const;
 const DOMAIN_LABELS: Record<string, string> = { DSA: "DSA", JAVA_THEORY: "Java Theory", BEHAVIOUR: "Behaviour", FUNCTIONAL_CODING: "Functional Coding", SYSTEM_DESIGN: "System Design", DDIA: "DDIA" };
+const DDIA_CHAPTERS = [
+  "Reliable, scalable, maintainable applications",
+  "Data models and query languages",
+  "Storage and retrieval",
+  "Encoding and evolution",
+  "Replication",
+  "Partitioning",
+  "Transactions",
+  "Distributed systems",
+  "Consistency and consensus",
+  "Batch processing",
+  "Stream processing",
+  "The future of data systems",
+];
 function Shell({ children }: { children: React.ReactNode }) {
   const { dispatch } = useAppState();
   return (
@@ -283,12 +297,16 @@ function Dashboard() {
             ["Java Theory", "JAVA_THEORY"],
             ["DSA", "DSA"],
             ["Functional Coding", "FUNCTIONAL_CODING"],
-            ["System Design", "SYSTEM_DESIGN"],
+            ["DDIA", "DDIA"],
+            ["Hello Interview", "SYSTEM_DESIGN"],
           ].map(([label, x]) => {
             const taskItems = x === "FUNCTIONAL_CODING" ? state.functionalTasks : x === "SYSTEM_DESIGN" ? state.systemDesignTasks : null;
-            const p = taskItems
-              ? { done: taskItems.filter((item: any) => item.status === "INTERVIEW_READY").length, total: taskItems.length, percentage: taskItems.length ? Math.round(taskItems.filter((item: any) => item.status === "INTERVIEW_READY").length / taskItems.length * 100) : 0 }
-              : progress(x === "DSA" ? state.dsa : state.learningItems.filter((i: any) => i.domain === x), x === "DSA");
+            const ddiaDone = DDIA_CHAPTERS.filter((_, index) => state.ddiaChapters.find((c: any) => c.id === `CHAPTER_${index + 1}`)?.status === "DONE").length;
+            const p = x === "DDIA"
+              ? { done: ddiaDone, total: DDIA_CHAPTERS.length, percentage: Math.round((ddiaDone / DDIA_CHAPTERS.length) * 100) }
+              : taskItems
+                ? { done: taskItems.filter((item: any) => item.status === "INTERVIEW_READY").length, total: taskItems.length, percentage: taskItems.length ? Math.round(taskItems.filter((item: any) => item.status === "INTERVIEW_READY").length / taskItems.length * 100) : 0 }
+                : progress(x === "DSA" ? state.dsa : state.learningItems.filter((i: any) => i.domain === x), x === "DSA");
             return (
               <div className="domain-progress-row" key={x}>
                 <div>
@@ -489,7 +507,7 @@ function FirstSolvedCell({ p, dispatch }: { p: any; dispatch: any }) {
     else el.focus();
   };
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    <div className="flex flex-wrap items-center justify-end gap-2">
       <button
         type="button"
         className="table-link link-button whitespace-nowrap text-sm"
@@ -519,7 +537,7 @@ function Dsa() {
           <table className="w-full min-w-[920px] table-fixed text-left">
             <colgroup>
               <col className="w-[28%]" />
-              <col className="w-[13rem]" />
+              <col className="w-[9rem]" />
               <col />
               <col />
               <col />
@@ -527,7 +545,7 @@ function Dsa() {
             <thead>
               <tr>
                 <th>Problem</th>
-                <th className="whitespace-nowrap pr-8">First solved</th>
+                <th className="whitespace-nowrap pr-8 text-right">First solved</th>
                 <th>D+1</th>
                 <th>D+4</th>
                 <th>D+17</th>
@@ -549,7 +567,7 @@ function Dsa() {
                       LeetCode ↗
                     </a>
                   </td>
-                  <td className="whitespace-nowrap pr-8">
+                  <td className="whitespace-nowrap pr-8 text-right">
                     <FirstSolvedCell p={p} dispatch={dispatch} />
                   </td>
                   {(["D1", "D4", "D17"] as const).map((stage) => {
@@ -917,20 +935,7 @@ function CalendarPage() {
 function SystemDesignPage() {
   const { state } = useAppState();
   const nav = useNavigate();
-  const chapters = [
-    "Reliable, scalable, maintainable applications",
-    "Data models and query languages",
-    "Storage and retrieval",
-    "Encoding and evolution",
-    "Replication",
-    "Partitioning",
-    "Transactions",
-    "Distributed systems",
-    "Consistency and consensus",
-    "Batch processing",
-    "Stream processing",
-    "The future of data systems",
-  ];
+  const chapters = DDIA_CHAPTERS;
   const chaptersDone = chapters.filter((_, index) => state.ddiaChapters.find((c: any) => c.id === `CHAPTER_${index + 1}`)?.status === "DONE").length;
   return (
     <>
