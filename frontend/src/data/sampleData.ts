@@ -8,8 +8,8 @@ import dsaProblems from "./questions/dsa.json";
 
 const question = (
   id: string, domain: any, track: string, title: string, category: string,
-  result: any = null, next = addDays(3), last = result ? addDays(-2) : null,
-): any => ({ id, domain, track, title, question: title, category, priority: "P1", modelAnswer: `A concise prepared answer for “${title}”. Start with the principle, explain the trade-off, then give a production example.`, personalAnswer: "", notes: "", followUps: "What trade-offs would you discuss?", latestResult: result, lastPractisedAt: last, nextReviewAt: next, keyPoints: [] });
+  result: any = null, next = addDays(3), last = result ? addDays(-2) : null, keyPoints: string[] = [],
+): any => ({ id, domain, track, title, question: title, category, priority: "P1", modelAnswer: `A concise prepared answer for “${title}”. Start with the principle, explain the trade-off, then give a production example.`, personalAnswer: "", notes: "", followUps: "What trade-offs would you discuss?", latestResult: result, lastPractisedAt: last, nextReviewAt: next, keyPoints });
 const review = (id: string, stage: any, days: number) => ({ id, stage, dueAt: addDays(days), completed: false, completedAt: null, note: "" });
 const functionalTitles = ["Booking API", "Payment Service", "Notification Service", "Inventory Reservation", "Rate Limiter"];
 const designTitles = ["Bitly", "Dropbox", "Yelp", "Local Delivery Service", "Ticketmaster", "Instagram", "FB News Feed", "Tinder", "LeetCode", "WhatsApp", "Strava", "Distributed Cache", "Rate Limiter", "Online Auction", "YouTube", "Job Scheduler", "FB Live Comments", "News Aggregator", "Price Tracking Service", "Notification System", "YouTube Top K", "Uber", "Robinhood", "Google Docs", "Web Crawler", "Ad Click Aggregator", "FB Post Search", "Payment System", "Metrics Monitoring", "Online Chess", "ChatGPT"];
@@ -19,8 +19,8 @@ const slug = (title: string) => slugOverrides[title] || title.toLowerCase().repl
 export const sampleData = (): AppState => {
   const learningItems = [
     ...behaviourQuestions.map((x, i) => question(`behaviour-${i + 1}`, "BEHAVIOUR", "BEHAVIOUR", x.title, x.category, i === 0 ? "PARTIAL" : i === 1 ? "FAIL" : null, i === 0 ? localDate() : i === 1 ? addDays(-1) : addDays(i + 2))),
-    ...javaTheoryCoreQuestions.map((x, i) => question(`java-core-${i + 1}`, "JAVA_THEORY", "CORE_JAVA", x.title, x.category, i === 0 ? "PARTIAL" : null, i === 0 ? localDate() : addDays(i + 3))),
-    ...javaTheorySpringQuestions.map((x, i) => question(`java-spring-${i + 1}`, "JAVA_THEORY", "SPRING_BOOT", x.title, x.category, null, addDays(i + 3))),
+    ...javaTheoryCoreQuestions.map((x, i) => question(`java-core-${i + 1}`, "JAVA_THEORY", "CORE_JAVA", x.title, x.category, i === 0 ? "PARTIAL" : null, i === 0 ? localDate() : addDays(i + 3), undefined, x.keyPoints)),
+    ...javaTheorySpringQuestions.map((x, i) => question(`java-spring-${i + 1}`, "JAVA_THEORY", "SPRING_BOOT", x.title, x.category, null, addDays(i + 3), undefined, x.keyPoints)),
     ...ddiaQuestions.map((x, i) => question(`ddia-${i + 1}-q1`, "DDIA", `CHAPTER_${x.chapter}`, x.title, "System design", null, addDays(i + 2))),
   ];
   return {

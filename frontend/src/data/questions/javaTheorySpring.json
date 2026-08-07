@@ -1,12 +1,102 @@
 [
-  { "title": "How does dependency injection work?", "category": "Dependency injection" },
-  { "title": "Explain the bean lifecycle", "category": "Bean lifecycle" },
-  { "title": "How do you manage configuration?", "category": "Configuration" },
-  { "title": "How should REST controllers be structured?", "category": "REST controllers" },
-  { "title": "How do you validate requests?", "category": "Validation" },
-  { "title": "How do you handle API exceptions?", "category": "Exception handling" },
-  { "title": "How does Spring Data derive queries?", "category": "Spring Data" },
-  { "title": "What does @Transactional do?", "category": "Transactions" },
-  { "title": "How do you secure an API?", "category": "Security" },
-  { "title": "How do you test a Spring Boot service?", "category": "Testing" }
+  {
+    "title": "How does dependency injection work?",
+    "category": "Dependency injection",
+    "keyPoints": [
+      "IoC container manages object creation and wiring instead of manual new",
+      "Constructor injection preferred over field injection for immutability and testability",
+      "Beans resolved by type, disambiguated with @Qualifier or @Primary",
+      "Reduces coupling between components and eases mocking in tests"
+    ]
+  },
+  {
+    "title": "Explain the bean lifecycle",
+    "category": "Bean lifecycle",
+    "keyPoints": [
+      "Instantiate, populate properties, apply Aware interfaces, then init callbacks",
+      "@PostConstruct / afterPropertiesSet run before the bean is ready for use",
+      "@PreDestroy runs on container shutdown for cleanup",
+      "Scope affects lifecycle: singleton (default, one per container) vs prototype (new per request)"
+    ]
+  },
+  {
+    "title": "How do you manage configuration?",
+    "category": "Configuration",
+    "keyPoints": [
+      "Externalize config via application.yml/properties with profiles (dev/prod)",
+      "@ConfigurationProperties for typed, validated config binding",
+      "@Value for injecting individual properties",
+      "Environment variables or a config server can override per environment"
+    ]
+  },
+  {
+    "title": "How should REST controllers be structured?",
+    "category": "REST controllers",
+    "keyPoints": [
+      "Keep controllers thin, delegate business logic to the service layer",
+      "Use proper HTTP verbs/status codes",
+      "Use DTOs instead of exposing entities directly",
+      "Have a clear API versioning strategy"
+    ]
+  },
+  {
+    "title": "How do you validate requests?",
+    "category": "Validation",
+    "keyPoints": [
+      "Bean Validation annotations (@NotNull, @Size, @Email) on DTOs",
+      "@Valid/@Validated on controller parameters triggers validation",
+      "Custom validators via ConstraintValidator for domain-specific rules",
+      "Handle validation errors centrally via @ExceptionHandler / MethodArgumentNotValidException"
+    ]
+  },
+  {
+    "title": "How do you handle API exceptions?",
+    "category": "Exception handling",
+    "keyPoints": [
+      "@ControllerAdvice + @ExceptionHandler for centralized error handling",
+      "Map exceptions to appropriate HTTP status codes and a structured error response",
+      "Avoid leaking stack traces or internal details to clients",
+      "Use a custom exception hierarchy for domain-specific errors"
+    ]
+  },
+  {
+    "title": "How does Spring Data derive queries?",
+    "category": "Spring Data",
+    "keyPoints": [
+      "Method name parsing (findByXAndY) generates queries automatically",
+      "@Query for custom JPQL/SQL when method-name derivation isn't enough",
+      "Repository interfaces extend JpaRepository/CrudRepository with no implementation needed",
+      "Paging and sorting supported via a Pageable parameter"
+    ]
+  },
+  {
+    "title": "What does @Transactional do?",
+    "category": "Transactions",
+    "keyPoints": [
+      "Wraps a method in a database transaction, commits on success",
+      "Rolls back by default on unchecked/runtime exceptions only",
+      "Propagation controls how transactions nest (REQUIRED, REQUIRES_NEW, etc.)",
+      "Proxy-based: self-invocation within the same class bypasses @Transactional"
+    ]
+  },
+  {
+    "title": "How do you secure an API?",
+    "category": "Security",
+    "keyPoints": [
+      "Spring Security filter chain intercepts requests for authentication/authorization",
+      "Stateless APIs typically use JWT/OAuth2 tokens instead of sessions",
+      "Method-level security via @PreAuthorize/@Secured",
+      "CORS/CSRF configuration appropriate to API vs browser-form usage"
+    ]
+  },
+  {
+    "title": "How do you test a Spring Boot service?",
+    "category": "Testing",
+    "keyPoints": [
+      "@SpringBootTest for full context integration tests, @WebMvcTest for a controller slice",
+      "Mock dependencies with @MockBean, verify HTTP layer with MockMvc",
+      "Use Testcontainers for real database-backed integration tests",
+      "Prefer plain Mockito unit tests over loading the full context when possible"
+    ]
+  }
 ]

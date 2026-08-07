@@ -1,12 +1,107 @@
 [
-  { "title": "How do equals and hashCode work together?", "category": "equals and hashCode" },
-  { "title": "What makes an object immutable?", "category": "Immutability" },
-  { "title": "Explain HashMap internals", "category": "Collections" },
-  { "title": "When would you use Optional?", "category": "Exceptions" },
-  { "title": "How do Java generics work?", "category": "Generics" },
-  { "title": "How do streams differ from collections?", "category": "Streams" },
-  { "title": "Explain CompletableFuture", "category": "Concurrency" },
-  { "title": "What lives on the JVM heap?", "category": "JVM memory" },
-  { "title": "How does garbage collection work?", "category": "Garbage collection" },
-  { "title": "How do you test concurrent code?", "category": "Testing" }
+  {
+    "title": "How do equals and hashCode work together?",
+    "category": "equals and hashCode",
+    "keyPoints": [
+      "Equal objects must return the same hashCode (the contract)",
+      "Overriding equals without hashCode breaks HashMap/HashSet lookups",
+      "Use Objects.equals and Objects.hash for null-safe implementations",
+      "equals must be reflexive, symmetric, transitive, and consistent"
+    ]
+  },
+  {
+    "title": "What makes an object immutable?",
+    "category": "Immutability",
+    "keyPoints": [
+      "All fields private and final, set only in the constructor",
+      "No setters or other mutating methods",
+      "Defensive copies for mutable fields like arrays, Date, collections",
+      "Don't leak internal mutable references through getters",
+      "Class itself final, or otherwise prevents subclasses from breaking invariants"
+    ]
+  },
+  {
+    "title": "Explain HashMap internals",
+    "category": "Collections",
+    "keyPoints": [
+      "Backed by an array of buckets (Node<K,V>[])",
+      "hash() spreads bits to reduce collisions",
+      "Collisions handled with a linked list, treeified to a red-black tree after 8 entries (Java 8+)",
+      "Load factor (default 0.75) triggers resize and rehashing, capacity doubles",
+      "Not thread-safe; use ConcurrentHashMap for concurrent access"
+    ]
+  },
+  {
+    "title": "When would you use Optional?",
+    "category": "Exceptions",
+    "keyPoints": [
+      "Represents a possibly-absent return value, avoids null checks",
+      "Avoid using Optional for fields, parameters, or serialization",
+      "Prefer map/filter/orElse over isPresent() + get()",
+      "Never call get() without checking presence first"
+    ]
+  },
+  {
+    "title": "How do Java generics work?",
+    "category": "Generics",
+    "keyPoints": [
+      "Type erasure removes generic type info at runtime, replaced with bounds or Object",
+      "Bounded types (extends/super) restrict allowed type parameters",
+      "PECS: producer extends, consumer super, for wildcard usage",
+      "Cannot create generic arrays directly",
+      "Unchecked warnings arise because generics aren't enforced at runtime"
+    ]
+  },
+  {
+    "title": "How do streams differ from collections?",
+    "category": "Streams",
+    "keyPoints": [
+      "Streams describe a computation pipeline, not a data structure",
+      "Streams are lazy: intermediate ops (filter/map) don't run until a terminal op",
+      "Streams can be infinite; collections are always finite",
+      "A stream can only be consumed once"
+    ]
+  },
+  {
+    "title": "Explain CompletableFuture",
+    "category": "Concurrency",
+    "keyPoints": [
+      "Represents the result of an async computation, supports composition",
+      "thenApply/thenCompose chain transformations; thenCombine/allOf/anyOf combine futures",
+      "exceptionally/handle provide async exception handling",
+      "Runs on ForkJoinPool.commonPool by default unless an Executor is supplied",
+      "Avoids blocking Future.get() and callback-hell patterns"
+    ]
+  },
+  {
+    "title": "What lives on the JVM heap?",
+    "category": "JVM memory",
+    "keyPoints": [
+      "Objects and arrays live on the heap; instance variables included",
+      "Heap is split into young generation (eden, survivor) and old generation",
+      "Local variables and call frames live on the stack, not the heap",
+      "Class metadata lives in metaspace (off-heap since Java 8)"
+    ]
+  },
+  {
+    "title": "How does garbage collection work?",
+    "category": "Garbage collection",
+    "keyPoints": [
+      "Mark-and-sweep: find objects reachable from GC roots, reclaim the rest",
+      "Generational hypothesis: most objects die young, so young gen is collected frequently",
+      "Minor GC (young gen) is cheap; major/full GC (old gen) is expensive",
+      "Collectors like G1, ZGC, Parallel trade off pause time vs throughput",
+      "finalize() is deprecated; prefer try-with-resources or Cleaner"
+    ]
+  },
+  {
+    "title": "How do you test concurrent code?",
+    "category": "Testing",
+    "keyPoints": [
+      "Use CountDownLatch/CyclicBarrier to coordinate threads deterministically",
+      "Stress test with many iterations/thread counts to surface race conditions",
+      "Avoid Thread.sleep for synchronization; use proper await mechanisms",
+      "Test for both correctness (no data races) and liveness (no deadlocks)"
+    ]
+  }
 ]
