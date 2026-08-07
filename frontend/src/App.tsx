@@ -438,58 +438,45 @@ function Questions({ kind }: { kind: "BEHAVIOUR" | "JAVA_THEORY" | "DDIA" }) {
   );
 }
 function FirstSolvedCell({ p, dispatch }: { p: any; dispatch: any }) {
-  const [editing, setEditing] = useState(false);
-  const [date, setDate] = useState(p.firstSolvedAt || localDate());
-  if (!editing) {
-    return (
-      <button
-        className="table-link whitespace-nowrap text-sm"
-        onClick={() => {
-          setDate(p.firstSolvedAt || localDate());
-          setEditing(true);
-        }}
-      >
-        {p.firstSolvedAt || "Mark as solved"}
-      </button>
-    );
-  }
-  const markSolved = () => {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const markSolved = (value: string) => {
+    if (!value) return;
     const reviews =
       p.reviews && p.reviews.length > 0
         ? p.reviews
         : (["D1", "D4", "D17"] as const).map((stage) => ({
             id: `${p.id}-${stage.toLowerCase()}`,
             stage,
-            dueAt: addDays(stage === "D1" ? 1 : stage === "D4" ? 4 : 17, date),
+            dueAt: addDays(stage === "D1" ? 1 : stage === "D4" ? 4 : 17, value),
             completed: false,
             completedAt: null,
             note: "",
           }));
-    dispatch({ type: "DSA_UPDATE", payload: { ...p, firstSolvedAt: date, reviews } });
-    setEditing(false);
+    dispatch({ type: "DSA_UPDATE", payload: { ...p, firstSolvedAt: value, reviews } });
+  };
+  const openPicker = () => {
+    const el = inputRef.current;
+    if (!el) return;
+    if (typeof (el as any).showPicker === "function") (el as any).showPicker();
+    else el.focus();
   };
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <input
-        type="date"
-        value={date}
-        onChange={(e) => setDate(e.target.value)}
-        className="w-[9.5rem] border-0 border-b border-[#c9d6d3] bg-transparent p-0.5 text-sm focus:border-[#21675d] focus:outline-none"
-      />
-      <button className="table-link whitespace-nowrap text-sm" onClick={markSolved}>
-        {p.firstSolvedAt ? "Update" : "Mark as solved"}
+      <button
+        type="button"
+        className="table-link link-button whitespace-nowrap text-sm"
+        onClick={openPicker}
+      >
+        {p.firstSolvedAt || "Mark as solved"}
       </button>
-      {p.firstSolvedAt && (
-        <button
-          className="text-xs text-[#657777] underline"
-          onClick={() => {
-            dispatch({ type: "DSA_UPDATE", payload: { ...p, firstSolvedAt: null } });
-            setEditing(false);
-          }}
-        >
-          Clear
-        </button>
-      )}
+      <input
+        ref={inputRef}
+        type="date"
+        value={p.firstSolvedAt || ""}
+        onChange={(e) => markSolved(e.target.value)}
+        className="sr-only"
+        aria-label="First solved date"
+      />
     </div>
   );
 }
@@ -500,9 +487,6 @@ function Dsa() {
       <PageHeader title="DSA" />
       {domain(state, "DSA", "DSA")}
       <div className="lc-panel rounded-xl border bg-white p-4">
-        <p className="mb-3">
-          Review steadily: completed reviews repair the bridge.
-        </p>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[920px] table-fixed text-left">
             <colgroup>
