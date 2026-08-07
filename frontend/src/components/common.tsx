@@ -25,7 +25,7 @@ export const StatusPicker = ({ title, value, options, onChange }: { title: strin
   </section>
 );
 
-export const PageHeader = ({ title, children }: { title: string; children?: React.ReactNode }) => <header className="mb-5 flex flex-wrap items-start justify-between gap-3"><div><h1 className="text-2xl font-bold text-[#203334]">{title}</h1><p className="text-[#657777]">A steady, practical preparation plan.</p></div>{children}</header>;
+export const PageHeader = ({ title, subtitle = "A steady, practical preparation plan.", children }: { title: string; subtitle?: string; children?: React.ReactNode }) => <header className="mb-5 flex flex-wrap items-start justify-between gap-3"><div><h1 className="text-2xl font-bold text-[#203334]">{title}</h1><p className="text-[#657777]">{subtitle}</p></div>{children}</header>;
 
 export const DomainProgress = ({ name, done, total }: { name: string; done: number; total: number }) => {
   const percentage = total ? Math.round((done / total) * 100) : 0;

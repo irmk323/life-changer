@@ -8,7 +8,7 @@ import {
   useNavigate,
   useParams,
 } from "react-router";
-import { Calendar, Home, BookOpen, Code2, Network, Brain, Pencil, ArrowUp, ArrowDown, AlarmClock, CalendarDays, CheckCircle2, ClipboardList, Flame, GripVertical, Plus, Sparkles, Target, TrendingUp, Trash2, Save } from "lucide-react";
+import { Calendar, Home, BookOpen, Code2, Network, Brain, Pencil, ArrowUp, ArrowDown, AlarmClock, CalendarDays, CheckCircle2, ClipboardList, Flame, GripVertical, Plus, Sparkles, Target, TrendingUp, Trash2, Save, Trophy, Crown } from "lucide-react";
 import { useRef, useState, type ElementType, type FormEvent } from "react";
 import {
   DomainProgress,
@@ -40,6 +40,7 @@ const nav = [
   ["/functional-coding", "Functional Coding", Code2],
   ["/system-design", "System Design", Network],
   ["/backup", "Backup", Save],
+  ["/leaderboard", "Leaderboard", Trophy],
 ] as const;
 const DOMAIN_LABELS: Record<string, string> = { DSA: "DSA", JAVA_THEORY: "Java Theory", BEHAVIOUR: "Behaviour", FUNCTIONAL_CODING: "Functional Coding", SYSTEM_DESIGN: "System Design", DDIA: "DDIA" };
 const DDIA_CHAPTERS = [
@@ -55,6 +56,25 @@ const DDIA_CHAPTERS = [
   "Batch processing",
   "Stream processing",
   "The future of data systems",
+];
+// Dummy data for the Leaderboard preview — replace with real synced data once the shared backend lands.
+const LEADERBOARD_DOMAINS = [
+  { key: "DDIA", label: "DDIA", icon: BookOpen, unit: "chapters" },
+  { key: "HELLO_INTERVIEW", label: "Hello Interview", icon: Network, unit: "exercises" },
+  { key: "DSA", label: "DSA", icon: Code2, unit: "problems" },
+] as const;
+const LEADERBOARD_USERS = [
+  { id: "alex", name: "Alex", initial: "A", isYou: false, progress: { DDIA: { done: 8, total: 12 }, HELLO_INTERVIEW: { done: 9, total: 15 }, DSA: { done: 52, total: 150 } } },
+  { id: "maki", name: "Maki", initial: "M", isYou: true, progress: { DDIA: { done: 7, total: 12 }, HELLO_INTERVIEW: { done: 6, total: 15 }, DSA: { done: 44, total: 150 } } },
+  { id: "sam", name: "Sam", initial: "S", isYou: false, progress: { DDIA: { done: 5, total: 12 }, HELLO_INTERVIEW: { done: 4, total: 15 }, DSA: { done: 30, total: 150 } } },
+];
+const LEADERBOARD_ACTIVITIES = [
+  { name: "Alex", initial: "A", isYou: false, verb: "completed", target: "Chapter 8", context: "Distributed Systems", time: "Today" },
+  { name: "Maki", initial: "M", isYou: true, verb: "reviewed", target: "Chapter 7", context: "Transactions", time: "Today" },
+  { name: "Sam", initial: "S", isYou: false, verb: "completed", target: "quiz", context: "Chapter 4 Quiz", time: "2 days ago" },
+  { name: "Alex", initial: "A", isYou: false, verb: "answered", target: "6 questions", context: "Chapter 7 Quiz", time: "Yesterday" },
+  { name: "Maki", initial: "M", isYou: true, verb: "completed", target: "quiz", context: "Chapter 6 Quiz", time: "Yesterday" },
+  { name: "Sam", initial: "S", isYou: false, verb: "completed", target: "Chapter 5", context: "Replication", time: "Yesterday" },
 ];
 function Shell({ children }: { children: React.ReactNode }) {
   const { dispatch } = useAppState();
@@ -1030,6 +1050,98 @@ function HelloInterviewPage() {
     </>
   );
 }
+function LeaderboardPage() {
+  const [tab, setTab] = useState<(typeof LEADERBOARD_DOMAINS)[number]["key"]>("DDIA");
+  const activeDomain = LEADERBOARD_DOMAINS.find((d) => d.key === tab)!;
+  const ranked = LEADERBOARD_USERS
+    .map((u) => {
+      const p = u.progress[tab];
+      return { ...u, done: p.done, total: p.total, percentage: p.total ? Math.round((p.done / p.total) * 100) : 0 };
+    })
+    .sort((a, b) => b.percentage - a.percentage);
+  const you = ranked.find((u) => u.isYou);
+  const leader = ranked[0];
+  const podium = [ranked[1], ranked[0], ranked[2]].filter(Boolean);
+  return (
+    <>
+      <PageHeader title="Leaderboard" subtitle="Compare progress across the shared curriculum." />
+      <div className="leaderboard-tabs mb-5">
+        {LEADERBOARD_DOMAINS.map((d) => (
+          <button type="button" key={d.key} className={`leaderboard-tab ${tab === d.key ? "leaderboard-tab--active" : ""}`} onClick={() => setTab(d.key)}>
+            <d.icon size={16} /> {d.label}
+          </button>
+        ))}
+      </div>
+      <div className="leaderboard-podium mb-5">
+        {podium.map((u) => {
+          const rank = ranked.indexOf(u) + 1;
+          const isLeader = rank === 1;
+          return (
+            <div key={u.id} className={`leaderboard-podium-card ${isLeader ? "leaderboard-podium-card--leader" : ""}`}>
+              <span className={`leaderboard-rank-badge leaderboard-rank-badge--${rank}`}>{rank}</span>
+              <div className="leaderboard-avatar">{u.initial}</div>
+              <div className="leaderboard-podium-card__name">
+                {u.name}
+                {u.isYou && <span className="leaderboard-you-tag">You</span>}
+              </div>
+              <div className="leaderboard-podium-card__pct">{u.percentage}%</div>
+              <div className="leaderboard-podium-card__sub">{u.done} / {u.total} {activeDomain.unit}</div>
+              <div className="leaderboard-podium-card__bar"><div style={{ width: `${u.percentage}%` }} /></div>
+              <div className="leaderboard-podium-card__footer">
+                {isLeader ? (
+                  <span className="leaderboard-podium-card__footer--leading"><Crown size={14} /> Leading</span>
+                ) : u.isYou ? (
+                  `${leader.percentage - u.percentage}% behind 1st`
+                ) : (
+                  `${Math.abs((you?.percentage ?? 0) - u.percentage)}% ${u.percentage <= (you?.percentage ?? 0) ? "behind" : "ahead of"} you`
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <section className="lc-panel mb-5 rounded-xl border bg-white p-4">
+        <h2 className="font-bold">Full ranking</h2>
+        <p className="mb-2 text-sm text-[#657777]">Only built-in curriculum items count toward progress.</p>
+        {ranked.map((u, index) => (
+          <div className="leaderboard-ranking-row" key={u.id}>
+            <span className={`leaderboard-ranking-badge leaderboard-rank-badge--${index + 1}`}>{index + 1}</span>
+            <div className="leaderboard-ranking-name">
+              <div className="leaderboard-avatar leaderboard-avatar--sm">{u.initial}</div>
+              {u.name}
+              {u.isYou && <span className="leaderboard-you-tag">You</span>}
+            </div>
+            <div className="leaderboard-ranking-bar-wrap">
+              <div className="leaderboard-ranking-bar"><div style={{ width: `${u.percentage}%` }} /></div>
+            </div>
+            <div className="leaderboard-ranking-pct">{u.percentage}%</div>
+            <div className="leaderboard-ranking-sub">{u.done} / {u.total} {activeDomain.unit}</div>
+          </div>
+        ))}
+      </section>
+      <section className="lc-panel rounded-xl border bg-white p-4">
+        <h2 className="font-bold">Recent activities</h2>
+        <p className="mb-2 text-sm text-[#657777]">See what everyone has been working on recently.</p>
+        {LEADERBOARD_ACTIVITIES.map((a, index) => (
+          <div className="leaderboard-activity-row" key={index}>
+            <div className="leaderboard-activity-row__user">
+              <div className="leaderboard-avatar leaderboard-avatar--sm">{a.initial}</div>
+              <span>{a.name}</span>
+              {a.isYou && <span className="leaderboard-you-tag">You</span>}
+            </div>
+            <div className="leaderboard-activity-row__text">
+              <strong>{a.verb}</strong> {a.target} <span className="text-[#657777]">— {a.context}</span>
+            </div>
+            <div className="leaderboard-activity-row__meta">
+              {a.time}
+              <span className="leaderboard-activity-row__dot" />
+            </div>
+          </div>
+        ))}
+      </section>
+    </>
+  );
+}
 function Tasks({ system = false }: { system?: boolean }) {
   const { state, dispatch } = useAppState(),
     nav = useNavigate(),
@@ -1416,6 +1528,7 @@ export default function App() {
           <Route path="/functional-coding/:id" element={<Tasks />} />
           <Route path="/system-design" element={<SystemDesignPage />} />
           <Route path="/backup" element={<Backup />} />
+          <Route path="/leaderboard" element={<LeaderboardPage />} />
           <Route
             path="/system-design/ddia/:chapterId"
             element={<Questions kind="DDIA" />}
