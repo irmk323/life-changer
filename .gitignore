@@ -4,7 +4,9 @@
 /data/
 target/
 .DS_Store
-.env
-.env.*
+.env.local
+.env.*.local
 backup
 docs
+node_modules/
+**/node_modules/

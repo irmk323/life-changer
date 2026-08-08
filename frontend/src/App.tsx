@@ -8,8 +8,8 @@ import {
   useNavigate,
   useParams,
 } from "react-router";
-import { Calendar, Home, BookOpen, Code2, Network, Brain, Pencil, ArrowUp, ArrowDown, AlarmClock, CalendarDays, CheckCircle2, ClipboardList, Flame, GripVertical, Plus, Sparkles, Target, TrendingUp, Trash2, Save, Trophy, Crown } from "lucide-react";
-import { useRef, useState, type ElementType, type FormEvent } from "react";
+import { Calendar, Home, BookOpen, Code2, Network, Brain, Pencil, ArrowUp, ArrowDown, AlarmClock, CalendarDays, CheckCircle2, ClipboardList, Flame, GripVertical, Plus, Sparkles, Target, TrendingUp, Trash2, Save, Trophy, Crown, LogIn } from "lucide-react";
+import { useEffect, useRef, useState, type ElementType, type FormEvent } from "react";
 import {
   DomainProgress,
   PageHeader,
@@ -20,6 +20,12 @@ import {
 } from "./components/common";
 import { Backup } from "./components/Backup";
 import { useAppState } from "./app/AppStateProvider";
+import { useAuth } from "./app/AuthProvider";
+import { ProfileGate, useProfile } from "./app/ProfileGate";
+import { LeaderboardSyncProvider } from "./app/LeaderboardSyncProvider";
+import { subscribeAllProgress, type StoredLeaderboardProgress } from "./services/firebase/leaderboardProgressRepository";
+import { subscribeAllProfiles } from "./services/firebase/profile";
+import { subscribeRecentActivities, type StoredLeaderboardActivity } from "./services/firebase/leaderboardActivityRepository";
 import { sampleData } from "./data/sampleData";
 import {
   dueState,
@@ -57,27 +63,14 @@ const DDIA_CHAPTERS = [
   "Stream processing",
   "The future of data systems",
 ];
-// Dummy data for the Leaderboard preview — replace with real synced data once the shared backend lands.
 const LEADERBOARD_DOMAINS = [
   { key: "DDIA", label: "DDIA", icon: BookOpen, unit: "chapters" },
   { key: "HELLO_INTERVIEW", label: "Hello Interview", icon: Network, unit: "exercises" },
   { key: "DSA", label: "DSA", icon: Code2, unit: "problems" },
 ] as const;
-const LEADERBOARD_USERS = [
-  { id: "alex", name: "Alex", initial: "A", isYou: false, progress: { DDIA: { done: 8, total: 12 }, HELLO_INTERVIEW: { done: 9, total: 15 }, DSA: { done: 52, total: 150 } } },
-  { id: "maki", name: "Maki", initial: "M", isYou: true, progress: { DDIA: { done: 7, total: 12 }, HELLO_INTERVIEW: { done: 6, total: 15 }, DSA: { done: 44, total: 150 } } },
-  { id: "sam", name: "Sam", initial: "S", isYou: false, progress: { DDIA: { done: 5, total: 12 }, HELLO_INTERVIEW: { done: 4, total: 15 }, DSA: { done: 30, total: 150 } } },
-];
-const LEADERBOARD_ACTIVITIES = [
-  { name: "Alex", initial: "A", isYou: false, verb: "completed", target: "Chapter 8", context: "Distributed Systems", time: "Today" },
-  { name: "Maki", initial: "M", isYou: true, verb: "reviewed", target: "Chapter 7", context: "Transactions", time: "Today" },
-  { name: "Sam", initial: "S", isYou: false, verb: "completed", target: "quiz", context: "Chapter 4 Quiz", time: "2 days ago" },
-  { name: "Alex", initial: "A", isYou: false, verb: "answered", target: "6 questions", context: "Chapter 7 Quiz", time: "Yesterday" },
-  { name: "Maki", initial: "M", isYou: true, verb: "completed", target: "quiz", context: "Chapter 6 Quiz", time: "Yesterday" },
-  { name: "Sam", initial: "S", isYou: false, verb: "completed", target: "Chapter 5", context: "Replication", time: "Yesterday" },
-];
 function Shell({ children }: { children: React.ReactNode }) {
   const { dispatch } = useAppState();
+  const { user, signOut } = useAuth();
   return (
     <div className="min-h-screen bg-[#f6f8f7] text-[#203334]">
       <aside className="fixed hidden h-screen w-60 bg-[#183d3a] p-4 text-[#e8f2ef] md:block">
@@ -97,6 +90,14 @@ function Shell({ children }: { children: React.ReactNode }) {
             {label}
           </NavLink>
         ))}
+        {user && (
+          <div className="mt-4 mb-2 rounded border border-[#6f9790] px-3 py-2 text-xs text-[#dce9e6]">
+            <p className="truncate">Signed in as {user.displayName || user.email}</p>
+            <button className="mt-1 underline hover:text-white" onClick={() => void signOut()}>
+              Sign out
+            </button>
+          </div>
+        )}
         <button
           className="mt-auto w-full rounded border border-[#6f9790] px-3 py-2 text-sm text-[#dce9e6] hover:bg-[#24514c]"
           onClick={() =>
@@ -1050,10 +1051,184 @@ function HelloInterviewPage() {
     </>
   );
 }
+function LeaderboardSignInPrompt() {
+  const { signIn, error } = useAuth();
+  const [pending, setPending] = useState(false);
+  const handleSignIn = async () => {
+    setPending(true);
+    try {
+      await signIn();
+    } catch {
+      // surfaced via useAuth().error below
+    } finally {
+      setPending(false);
+    }
+  };
+  return (
+    <>
+      <PageHeader title="Leaderboard" subtitle="Sign in with Google to compare progress with others." />
+      <section className="lc-panel rounded-xl border bg-white p-8 text-center">
+        <Trophy size={32} className="mx-auto mb-3 text-[#21675d]" />
+        <p className="mb-4 text-[#657777]">Sign in with your Google account to see the shared leaderboard.</p>
+        <button
+          type="button"
+          className="dashboard-primary mx-auto"
+          onClick={() => void handleSignIn()}
+          disabled={pending}
+        >
+          <LogIn size={16} /> {pending ? "Signing in…" : "Sign in with Google"}
+        </button>
+        {error && <p className="mt-3 text-sm text-[#923d36]">{error}</p>}
+      </section>
+    </>
+  );
+}
+function EditDisplayNameForm({ displayName: currentName, onDone }: { displayName: string; onDone: () => void }) {
+  const { renameProfile } = useProfile();
+  const [name, setName] = useState(currentName);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const handleSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await renameProfile(trimmed);
+      onDone();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save your name.");
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <form className="flex flex-wrap items-center gap-2" onSubmit={(event) => void handleSubmit(event)}>
+      <input className="rounded border p-1 text-sm" value={name} onChange={(event) => setName(event.target.value)} required />
+      <button type="submit" className="text-sm text-[#21675d] underline" disabled={saving || !name.trim()}>
+        {saving ? "Saving…" : "Save"}
+      </button>
+      <button type="button" className="text-sm text-[#657777] underline" onClick={onDone}>
+        Cancel
+      </button>
+      {error && <span className="text-sm text-[#923d36]">{error}</span>}
+    </form>
+  );
+}
+interface LeaderboardEntry {
+  uid: string;
+  name: string;
+  initial: string;
+  isYou: boolean;
+  progress: Record<(typeof LEADERBOARD_DOMAINS)[number]["key"], { done: number; total: number }>;
+}
+function useLeaderboardEntries(currentUid: string | undefined): { loading: boolean; entries: LeaderboardEntry[] } {
+  const [progressByUid, setProgressByUid] = useState<Record<string, StoredLeaderboardProgress>>({});
+  const [profileNameByUid, setProfileNameByUid] = useState<Record<string, string>>({});
+  const [progressLoaded, setProgressLoaded] = useState(false);
+  const [profilesLoaded, setProfilesLoaded] = useState(false);
+
+  useEffect(() => {
+    // Firestore denies these reads while signed out — don't even try, to avoid noisy
+    // permission-denied console errors on a page LeaderboardPage renders a sign-in
+    // prompt for anyway.
+    if (!currentUid) { setProgressLoaded(true); return; }
+    return subscribeAllProgress((all) => {
+      setProgressByUid(Object.fromEntries(all.map((p) => [p.uid, p])));
+      setProgressLoaded(true);
+    });
+  }, [currentUid]);
+
+  useEffect(() => {
+    if (!currentUid) { setProfilesLoaded(true); return; }
+    return subscribeAllProfiles((all) => {
+      setProfileNameByUid(Object.fromEntries(all.map((p) => [p.uid, p.displayName])));
+      setProfilesLoaded(true);
+    });
+  }, [currentUid]);
+
+  const entries: LeaderboardEntry[] = Object.values(progressByUid).flatMap((p) => {
+    const name = profileNameByUid[p.uid];
+    if (!name) return [];
+    return [{
+      uid: p.uid,
+      name,
+      initial: name.trim().charAt(0).toUpperCase() || "?",
+      isYou: p.uid === currentUid,
+      progress: {
+        DDIA: { done: p.ddia.completed, total: p.ddia.total },
+        HELLO_INTERVIEW: { done: p.helloInterview.completed, total: p.helloInterview.total },
+        DSA: { done: p.dsa.completed, total: p.dsa.total },
+      },
+    }];
+  });
+
+  return { loading: !progressLoaded || !profilesLoaded, entries };
+}
+interface LeaderboardActivityEntry {
+  uid: string;
+  name: string;
+  initial: string;
+  isYou: boolean;
+  label: string;
+  occurredAt: string;
+}
+const timeAgo = (iso: string) => {
+  const diffDays = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
+  if (diffDays <= 0) return "Today";
+  if (diffDays === 1) return "Yesterday";
+  return `${diffDays} days ago`;
+};
+function useLeaderboardActivities(currentUid: string | undefined): { loading: boolean; activities: LeaderboardActivityEntry[] } {
+  const [rawActivities, setRawActivities] = useState<StoredLeaderboardActivity[]>([]);
+  const [profileNameByUid, setProfileNameByUid] = useState<Record<string, string>>({});
+  const [activitiesLoaded, setActivitiesLoaded] = useState(false);
+  const [profilesLoaded, setProfilesLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!currentUid) { setActivitiesLoaded(true); return; }
+    return subscribeRecentActivities(20, (all) => {
+      setRawActivities(all);
+      setActivitiesLoaded(true);
+    });
+  }, [currentUid]);
+
+  useEffect(() => {
+    if (!currentUid) { setProfilesLoaded(true); return; }
+    return subscribeAllProfiles((all) => {
+      setProfileNameByUid(Object.fromEntries(all.map((p) => [p.uid, p.displayName])));
+      setProfilesLoaded(true);
+    });
+  }, [currentUid]);
+
+  const activities: LeaderboardActivityEntry[] = rawActivities.flatMap((a) => {
+    const name = profileNameByUid[a.uid];
+    if (!name) return [];
+    return [{
+      uid: a.uid,
+      name,
+      initial: name.trim().charAt(0).toUpperCase() || "?",
+      isYou: a.uid === currentUid,
+      label: a.label,
+      occurredAt: a.occurredAt,
+    }];
+  });
+
+  return { loading: !activitiesLoaded || !profilesLoaded, activities };
+}
 function LeaderboardPage() {
+  const { user, loading } = useAuth();
+  const { profile } = useProfile();
   const [tab, setTab] = useState<(typeof LEADERBOARD_DOMAINS)[number]["key"]>("DDIA");
+  const [editingName, setEditingName] = useState(false);
+  const { loading: entriesLoading, entries } = useLeaderboardEntries(user?.uid);
+  const { loading: activitiesLoading, activities } = useLeaderboardActivities(user?.uid);
+  if (loading) return null;
+  if (!user) return <LeaderboardSignInPrompt />;
+  if (!profile) return null;
   const activeDomain = LEADERBOARD_DOMAINS.find((d) => d.key === tab)!;
-  const ranked = LEADERBOARD_USERS
+  const ranked = entries
     .map((u) => {
       const p = u.progress[tab];
       return { ...u, done: p.done, total: p.total, percentage: p.total ? Math.round((p.done / p.total) * 100) : 0 };
@@ -1064,7 +1239,18 @@ function LeaderboardPage() {
   const podium = [ranked[1], ranked[0], ranked[2]].filter(Boolean);
   return (
     <>
-      <PageHeader title="Leaderboard" subtitle="Compare progress across the shared curriculum." />
+      <PageHeader title="Leaderboard" subtitle="Compare progress across the shared curriculum.">
+        {editingName ? (
+          <EditDisplayNameForm displayName={profile.displayName} onDone={() => setEditingName(false)} />
+        ) : (
+          <span className="text-sm text-[#657777]">
+            Showing as <strong>{profile.displayName}</strong>{" "}
+            <button type="button" className="text-[#21675d] underline" onClick={() => setEditingName(true)}>
+              Edit name
+            </button>
+          </span>
+        )}
+      </PageHeader>
       <div className="leaderboard-tabs mb-5">
         {LEADERBOARD_DOMAINS.map((d) => (
           <button type="button" key={d.key} className={`leaderboard-tab ${tab === d.key ? "leaderboard-tab--active" : ""}`} onClick={() => setTab(d.key)}>
@@ -1072,71 +1258,89 @@ function LeaderboardPage() {
           </button>
         ))}
       </div>
-      <div className="leaderboard-podium mb-5">
-        {podium.map((u) => {
-          const rank = ranked.indexOf(u) + 1;
-          const isLeader = rank === 1;
-          return (
-            <div key={u.id} className={`leaderboard-podium-card ${isLeader ? "leaderboard-podium-card--leader" : ""}`}>
-              <span className={`leaderboard-rank-badge leaderboard-rank-badge--${rank}`}>{rank}</span>
-              <div className="leaderboard-avatar">{u.initial}</div>
-              <div className="leaderboard-podium-card__name">
-                {u.name}
-                {u.isYou && <span className="leaderboard-you-tag">You</span>}
-              </div>
-              <div className="leaderboard-podium-card__pct">{u.percentage}%</div>
-              <div className="leaderboard-podium-card__sub">{u.done} / {u.total} {activeDomain.unit}</div>
-              <div className="leaderboard-podium-card__footer">
-                {isLeader ? (
-                  <span className="leaderboard-podium-card__footer--leading"><Crown size={14} /> Leading</span>
-                ) : u.isYou ? (
-                  `${leader.percentage - u.percentage}% behind 1st`
-                ) : (
-                  `${Math.abs((you?.percentage ?? 0) - u.percentage)}% ${u.percentage <= (you?.percentage ?? 0) ? "behind" : "ahead of"} you`
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      <section className="lc-panel mb-5 rounded-xl border bg-white p-4">
-        <h2 className="font-bold">Full ranking</h2>
-        <p className="mb-2 text-sm text-[#657777]">Only built-in curriculum items count toward progress.</p>
-        {ranked.map((u, index) => (
-          <div className="leaderboard-ranking-row" key={u.id}>
-            <span className={`leaderboard-ranking-badge leaderboard-rank-badge--${index + 1}`}>{index + 1}</span>
-            <div className="leaderboard-ranking-name">
-              <div className="leaderboard-avatar leaderboard-avatar--sm">{u.initial}</div>
-              {u.name}
-              {u.isYou && <span className="leaderboard-you-tag">You</span>}
-            </div>
-            <div className="leaderboard-ranking-bar-wrap">
-              <div className="leaderboard-ranking-bar"><div style={{ width: `${u.percentage}%` }} /></div>
-            </div>
-            <div className="leaderboard-ranking-pct">{u.percentage}%</div>
-            <div className="leaderboard-ranking-sub">{u.done} / {u.total} {activeDomain.unit}</div>
+      {entriesLoading ? (
+        <section className="lc-panel mb-5 rounded-xl border bg-white p-8 text-center text-[#657777]">
+          Loading leaderboard…
+        </section>
+      ) : ranked.length === 0 ? (
+        <section className="lc-panel mb-5 rounded-xl border bg-white p-8 text-center text-[#657777]">
+          No one has synced progress yet. Complete some tasks to appear here!
+        </section>
+      ) : (
+        <>
+          <div className="leaderboard-podium mb-5">
+            {podium.map((u) => {
+              const rank = ranked.indexOf(u) + 1;
+              const isLeader = rank === 1;
+              return (
+                <div key={u.uid} className={`leaderboard-podium-card ${isLeader ? "leaderboard-podium-card--leader" : ""}`}>
+                  <span className={`leaderboard-rank-badge leaderboard-rank-badge--${rank}`}>{rank}</span>
+                  <div className="leaderboard-avatar">{u.initial}</div>
+                  <div className="leaderboard-podium-card__name">
+                    {u.name}
+                    {u.isYou && <span className="leaderboard-you-tag">You</span>}
+                  </div>
+                  <div className="leaderboard-podium-card__pct">{u.percentage}%</div>
+                  <div className="leaderboard-podium-card__sub">{u.done} / {u.total} {activeDomain.unit}</div>
+                  <div className="leaderboard-podium-card__footer">
+                    {isLeader ? (
+                      <span className="leaderboard-podium-card__footer--leading"><Crown size={14} /> Leading</span>
+                    ) : u.isYou ? (
+                      `${leader.percentage - u.percentage}% behind 1st`
+                    ) : (
+                      `${Math.abs((you?.percentage ?? 0) - u.percentage)}% ${u.percentage <= (you?.percentage ?? 0) ? "behind" : "ahead of"} you`
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        ))}
-      </section>
+          <section className="lc-panel mb-5 rounded-xl border bg-white p-4">
+            <h2 className="font-bold">Full ranking</h2>
+            <p className="mb-2 text-sm text-[#657777]">Only built-in curriculum items count toward progress.</p>
+            {ranked.map((u, index) => (
+              <div className="leaderboard-ranking-row" key={u.uid}>
+                <span className={`leaderboard-ranking-badge leaderboard-rank-badge--${index + 1}`}>{index + 1}</span>
+                <div className="leaderboard-ranking-name">
+                  <div className="leaderboard-avatar leaderboard-avatar--sm">{u.initial}</div>
+                  {u.name}
+                  {u.isYou && <span className="leaderboard-you-tag">You</span>}
+                </div>
+                <div className="leaderboard-ranking-bar-wrap">
+                  <div className="leaderboard-ranking-bar"><div style={{ width: `${u.percentage}%` }} /></div>
+                </div>
+                <div className="leaderboard-ranking-pct">{u.percentage}%</div>
+                <div className="leaderboard-ranking-sub">{u.done} / {u.total} {activeDomain.unit}</div>
+              </div>
+            ))}
+          </section>
+        </>
+      )}
       <section className="lc-panel rounded-xl border bg-white p-4">
         <h2 className="font-bold">Recent activities</h2>
         <p className="mb-2 text-sm text-[#657777]">See what everyone has been working on recently.</p>
-        {LEADERBOARD_ACTIVITIES.map((a, index) => (
-          <div className="leaderboard-activity-row" key={index}>
-            <div className="leaderboard-activity-row__user">
-              <div className="leaderboard-avatar leaderboard-avatar--sm">{a.initial}</div>
-              <span>{a.name}</span>
-              {a.isYou && <span className="leaderboard-you-tag">You</span>}
+        {activitiesLoading ? (
+          <p className="text-sm text-[#657777]">Loading recent activity…</p>
+        ) : activities.length === 0 ? (
+          <p className="text-sm text-[#657777]">No recent activity yet.</p>
+        ) : (
+          activities.map((a) => (
+            <div className="leaderboard-activity-row" key={`${a.uid}-${a.occurredAt}-${a.label}`}>
+              <div className="leaderboard-activity-row__user">
+                <div className="leaderboard-avatar leaderboard-avatar--sm">{a.initial}</div>
+                <span>{a.name}</span>
+                {a.isYou && <span className="leaderboard-you-tag">You</span>}
+              </div>
+              <div className="leaderboard-activity-row__text">
+                <strong>completed</strong> {a.label}
+              </div>
+              <div className="leaderboard-activity-row__meta">
+                {timeAgo(a.occurredAt)}
+                <span className="leaderboard-activity-row__dot" />
+              </div>
             </div>
-            <div className="leaderboard-activity-row__text">
-              <strong>{a.verb}</strong> {a.target} <span className="text-[#657777]">— {a.context}</span>
-            </div>
-            <div className="leaderboard-activity-row__meta">
-              {a.time}
-              <span className="leaderboard-activity-row__dot" />
-            </div>
-          </div>
-        ))}
+          ))
+        )}
       </section>
     </>
   );
@@ -1322,35 +1526,37 @@ function Tasks({ system = false }: { system?: boolean }) {
         system ? "System Design" : "Functional Coding",
         system ? "SYSTEM_DESIGN" : "FUNCTIONAL_CODING",
       )}
-      <form
-        className="mb-3 flex gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (title) {
-            const item = {
-              id: crypto.randomUUID(),
-              title,
-              category: system ? "System design" : "Backend exercise",
-              status: "NOT_STARTED",
-              attempts: [],
-              statement: "",
-              notes: "",
-            };
-            dispatch({ type: "UPSERT", payload: { collection, item } });
-            setTitle("");
-          }
-        }}
-      >
-        <input
-          className="rounded border p-2"
-          placeholder="New task"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-        />
-        <button className="rounded bg-teal-700 px-3 text-white">
-          Add task
-        </button>
-      </form>
+      {!system && (
+        <form
+          className="mb-3 flex gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (title) {
+              const item = {
+                id: crypto.randomUUID(),
+                title,
+                category: "Backend exercise",
+                status: "NOT_STARTED",
+                attempts: [],
+                statement: "",
+                notes: "",
+              };
+              dispatch({ type: "UPSERT", payload: { collection, item } });
+              setTitle("");
+            }
+          }}
+        >
+          <input
+            className="rounded border p-2"
+            placeholder="New task"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+          />
+          <button className="rounded bg-teal-700 px-3 text-white">
+            Add task
+          </button>
+        </form>
+      )}
       <section className="task-table lc-panel overflow-x-auto rounded-xl border bg-white p-4">
         <table className="w-full min-w-[720px] text-left text-sm">
           <thead className="border-b text-xs uppercase tracking-wide text-[#657777]">
@@ -1511,6 +1717,7 @@ function Motivation() {
 }
 export default function App() {
   return (
+    <LeaderboardSyncProvider>
     <HashRouter>
       <Shell>
         <Routes>
@@ -1527,7 +1734,7 @@ export default function App() {
           <Route path="/functional-coding/:id" element={<Tasks />} />
           <Route path="/system-design" element={<SystemDesignPage />} />
           <Route path="/backup" element={<Backup />} />
-          <Route path="/leaderboard" element={<LeaderboardPage />} />
+          <Route path="/leaderboard" element={<ProfileGate><LeaderboardPage /></ProfileGate>} />
           <Route
             path="/system-design/ddia/:chapterId"
             element={<Questions kind="DDIA" />}
@@ -1543,5 +1750,6 @@ export default function App() {
         </Routes>
       </Shell>
     </HashRouter>
+    </LeaderboardSyncProvider>
   );
 }

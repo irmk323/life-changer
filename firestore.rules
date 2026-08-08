@@ -1,0 +1,86 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Phase 2F-1: hardened rules for the three Leaderboard collections. Every write is
+    // restricted to its owner and to an exact field allowlist (extra fields — e.g. notes,
+    // personalAnswer, or any other private AppState data — are always rejected). Every
+    // other collection (learningItems, dsa, dailyLogs, ...) has no match block here, so it
+    // stays denied by Firestore's implicit default-deny: personal learning data can never
+    // reach Firestore at all.
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    // ---- profiles/{uid} ----
+    // Any signed-in user may read (Leaderboard needs to show everyone's display name).
+    // Only the owner may write, and only with this exact field set.
+    function isValidProfile(uid, data) {
+      return data.keys().hasOnly(['uid', 'displayName', 'createdAt', 'updatedAt'])
+        && data.uid == uid
+        && data.displayName is string
+        && data.displayName.size() > 0
+        && data.displayName.size() < 100
+        && data.createdAt is string
+        && data.updatedAt is string;
+    }
+
+    match /profiles/{uid} {
+      allow read: if isSignedIn();
+      allow create, update: if isOwner(uid) && isValidProfile(uid, request.resource.data);
+      allow delete: if false;
+    }
+
+    // ---- leaderboardProgress/{uid} ----
+    // Any signed-in user may read (needed to render the Leaderboard ranking). Only the
+    // owner may write, and only with this exact field set — each domain must be a
+    // {completed, total, percentage} map of numbers, matching calculateLeaderboardProgress().
+    function isValidDomainProgress(value) {
+      return value is map
+        && value.keys().hasOnly(['completed', 'total', 'percentage'])
+        && value.completed is number
+        && value.total is number
+        && value.percentage is number;
+    }
+
+    function isValidProgress(uid, data) {
+      return data.keys().hasOnly(['uid', 'dsa', 'ddia', 'helloInterview', 'updatedAt'])
+        && data.uid == uid
+        && isValidDomainProgress(data.dsa)
+        && isValidDomainProgress(data.ddia)
+        && isValidDomainProgress(data.helloInterview)
+        && data.updatedAt is string;
+    }
+
+    match /leaderboardProgress/{uid} {
+      allow read: if isSignedIn();
+      allow create, update: if isOwner(uid) && isValidProgress(uid, request.resource.data);
+      allow delete: if false;
+    }
+
+    // ---- leaderboardActivities/{activityId} ----
+    // Append-only: any signed-in user may read, but an activity may only be created by the
+    // user it belongs to (payload uid must match the caller), with this exact field set.
+    // Never updated or deleted from the client.
+    function isValidActivity(data) {
+      return data.keys().hasOnly(['uid', 'domain', 'label', 'occurredAt'])
+        && data.uid == request.auth.uid
+        && data.domain in ['DSA', 'DDIA', 'HELLO_INTERVIEW']
+        && data.label is string
+        && data.label.size() > 0
+        && data.label.size() < 200
+        && data.occurredAt is string;
+    }
+
+    match /leaderboardActivities/{activityId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && isValidActivity(request.resource.data);
+      allow update, delete: if false;
+    }
+  }
+}
