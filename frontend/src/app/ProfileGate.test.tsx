@@ -22,10 +22,10 @@ function Consumer() {
 describe('ProfileGate', () => {
   afterEach(() => cleanup());
 
-  it('passes children straight through when signed out, so LeaderboardPage can show its own sign-in prompt', () => {
+  it('renders nothing when signed out (AppAuthGate is responsible for the signed-out state)', () => {
     useAuth.mockReturnValue({ user: null, loading: false });
-    render(<ProfileGate><span>content</span></ProfileGate>);
-    expect(screen.getByText('content')).toBeInTheDocument();
+    const { container } = render(<ProfileGate><span>content</span></ProfileGate>);
+    expect(container).toBeEmptyDOMElement();
   });
 
   it('shows the profile setup form when signed in with no existing profile, then reveals children once created', async () => {

@@ -195,3 +195,56 @@ describe('firestore.rules: everything else stays default-denied', () => {
     await assertFails(alice.collection('appState').doc('alice').set({ dsa: [], learningItems: [] }));
   });
 });
+
+describe('firestore.rules: userData/{uid}/** (Phase 2G private personal data)', () => {
+  it('lets the owner read their own domainState document', async () => {
+    await seed((db) => db.doc('userData/alice/domainState/dsa').set({ 'dsa-1': { firstSolvedAt: '2026-08-01', reviews: [] } }));
+    const alice = testEnv.authenticatedContext('alice').firestore();
+    await assertSucceeds(alice.doc('userData/alice/domainState/dsa').get());
+  });
+
+  it('lets the owner write their own domainState document', async () => {
+    const alice = testEnv.authenticatedContext('alice').firestore();
+    await assertSucceeds(alice.doc('userData/alice/domainState/dsa').set({ 'dsa-1.firstSolvedAt': '2026-08-08' }, { merge: true }));
+  });
+
+  it('lets the owner write deeply nested private documents too (answers/dsaNotes/entities)', async () => {
+    const alice = testEnv.authenticatedContext('alice').firestore();
+    await assertSucceeds(alice.doc('userData/alice/answers/java-core-1').set({ personalAnswer: 'my answer', notes: '', followUps: '', updatedAt: '2026-08-08' }));
+    await assertSucceeds(alice.doc('userData/alice/priorities/p1').set({ id: 'p1', title: 'Study DSA' }));
+  });
+
+  it("denies another signed-in user from reading someone else's private userData", async () => {
+    await seed((db) => db.doc('userData/alice/domainState/dsa').set({ 'dsa-1': { firstSolvedAt: '2026-08-01', reviews: [] } }));
+    const bob = testEnv.authenticatedContext('bob').firestore();
+    await assertFails(bob.doc('userData/alice/domainState/dsa').get());
+  });
+
+  it("denies another signed-in user from writing to someone else's private userData", async () => {
+    const bob = testEnv.authenticatedContext('bob').firestore();
+    await assertFails(bob.doc('userData/alice/domainState/dsa').set({ 'dsa-1': { firstSolvedAt: '2026-08-08', reviews: [] } }));
+  });
+
+  it('denies reads while signed out', async () => {
+    await seed((db) => db.doc('userData/alice/domainState/dsa').set({ 'dsa-1': { firstSolvedAt: '2026-08-01', reviews: [] } }));
+    const anon = testEnv.unauthenticatedContext().firestore();
+    await assertFails(anon.doc('userData/alice/domainState/dsa').get());
+  });
+
+  it('denies writes while signed out', async () => {
+    const anon = testEnv.unauthenticatedContext().firestore();
+    await assertFails(anon.doc('userData/alice/domainState/dsa').set({ 'dsa-1': { firstSolvedAt: '2026-08-08', reviews: [] } }));
+  });
+
+  it('lets the owner delete their own private documents (e.g. removing a priority)', async () => {
+    await seed((db) => db.doc('userData/alice/priorities/p1').set({ id: 'p1', title: 'x' }));
+    const alice = testEnv.authenticatedContext('alice').firestore();
+    await assertSucceeds(alice.doc('userData/alice/priorities/p1').delete());
+  });
+
+  it("denies another signed-in user from deleting someone else's private documents", async () => {
+    await seed((db) => db.doc('userData/alice/priorities/p1').set({ id: 'p1', title: 'x' }));
+    const bob = testEnv.authenticatedContext('bob').firestore();
+    await assertFails(bob.doc('userData/alice/priorities/p1').delete());
+  });
+});

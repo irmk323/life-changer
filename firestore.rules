@@ -82,5 +82,18 @@ service cloud.firestore {
       allow create: if isSignedIn() && isValidActivity(request.resource.data);
       allow update, delete: if false;
     }
+
+    // ---- userData/{uid}/** (Phase 2G) ----
+    // All private personal-data documents (domainState/*, answers/*, dsaNotes/*,
+    // weeklyPlanItems/*, motivationEntries/*, priorities/*, activities/*, dailyLogs/*,
+    // functionalTasks/*, systemDesignTasks/*) live under this one uid-scoped subtree, so a
+    // single recursive rule covers all of it: only the owner may ever read or write their
+    // own data, and no other authenticated user — however "signed in" they are — can read
+    // or write another user's userData at all. Per-collection field-shape validation is
+    // deferred; this only enforces ownership (see docs/firebase-leaderboard-tasks.md,
+    // Task 2G-7).
+    match /userData/{uid}/{document=**} {
+      allow read, write: if isOwner(uid);
+    }
   }
 }

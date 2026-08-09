@@ -1,55 +1,29 @@
-import { useEffect, useRef, useState } from "react";
-import { FolderOpen, Download, Upload } from "lucide-react";
+import { useRef, useState } from "react";
+import { Download, Upload } from "lucide-react";
 import { PageHeader } from "./common";
 import { useAppState } from "../app/AppStateProvider";
-import {
-  chooseBackupFolder,
-  getBackupFolderName,
-  backupToFolder,
-  downloadBackup,
-  importBackup,
-  lastBackupAt,
-  supportsFileSystemAccess,
-} from "../services/storage/backupRepository";
-
-const formatTimestamp = (date: Date | null) =>
-  date ? date.toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }) : "Never";
+import { useAuth } from "../app/AuthProvider";
+import { exportUserData, downloadBackupJson } from "../services/backup/exportUserData";
+import { importUserData, InvalidBackupError } from "../services/backup/importUserData";
 
 export function Backup() {
-  const { state, dispatch } = useAppState();
-  const [folderName, setFolderName] = useState<string | null>(null);
-  const [lastBackup, setLastBackup] = useState<Date | null>(lastBackupAt());
+  const { user } = useAuth();
+  const { reload } = useAppState();
   const [message, setMessage] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
-  const supported = supportsFileSystemAccess();
 
-  useEffect(() => {
-    getBackupFolderName().then(setFolderName);
-  }, []);
-
-  const chooseFolder = async () => {
-    const name = await chooseBackupFolder();
-    setFolderName(name);
-    setMessage(name ? `Backup folder set to "${name}".` : null);
-  };
-
-  const backupNow = async () => {
-    if (!supported) {
-      downloadBackup(state);
-      setMessage("Downloaded a backup file.");
-      return;
-    }
-    if (!folderName) {
-      await chooseFolder();
-    }
-    const result = await backupToFolder(state, true);
-    if (result === "wrote") {
-      setLastBackup(lastBackupAt());
-      setMessage("Backup saved to your folder.");
-    } else if (result === "no-permission") {
-      setMessage("Permission to write to the backup folder was denied.");
-    } else if (result === "no-folder") {
-      setMessage("Choose a backup folder first.");
+  const exportNow = async () => {
+    if (!user) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      downloadBackupJson(await exportUserData(user.uid));
+      setMessage("Downloaded a backup of your data.");
+    } catch {
+      setMessage("Could not export your data. Please try again.");
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -58,14 +32,19 @@ export function Backup() {
   const onImportFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     event.target.value = "";
-    if (!file) return;
-    if (!confirm("Importing will replace all current data with this backup. Continue?")) return;
+    if (!file || !user) return;
+    if (!confirm("Importing will replace all your current data with this backup. Continue?")) return;
+    setBusy(true);
+    setMessage(null);
     try {
-      const imported = await importBackup(file);
-      dispatch({ type: "REPLACE", payload: imported });
+      const parsed = JSON.parse(await file.text());
+      await importUserData(user.uid, parsed);
+      await reload();
       setMessage("Backup imported.");
-    } catch {
-      setMessage("That file could not be read as a backup.");
+    } catch (err) {
+      setMessage(err instanceof InvalidBackupError ? err.message : "That file could not be imported.");
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -74,33 +53,19 @@ export function Backup() {
       <PageHeader title="Backup" />
       <section className="lc-panel mb-5 rounded-xl border bg-white p-4">
         <p className="text-sm text-[#657777]">
-          Last backup: <strong>{formatTimestamp(lastBackup)}</strong>
+          Your data is saved automatically to your account. Use this page to download a personal copy, or to
+          restore your data from a previously downloaded file.
         </p>
-        {supported && (
-          <p className="mt-1 text-sm text-[#657777]">
-            Backup folder: <strong>{folderName ?? "Not set"}</strong>
-          </p>
-        )}
         <div className="mt-4 flex flex-wrap gap-2">
-          {supported && (
-            <button className="inline-flex items-center gap-2 rounded border px-3 py-2" onClick={chooseFolder}>
-              <FolderOpen size={16} /> {folderName ? "Change backup folder" : "Choose backup folder"}
-            </button>
-          )}
-          <button className="inline-flex items-center gap-2 rounded bg-[#21675d] px-3 py-2 text-white" onClick={backupNow}>
-            <Download size={16} /> Backup now
+          <button disabled={busy} className="inline-flex items-center gap-2 rounded bg-[#21675d] px-3 py-2 text-white disabled:opacity-60" onClick={exportNow}>
+            <Download size={16} /> Export my data
           </button>
-          <button className="inline-flex items-center gap-2 rounded border px-3 py-2" onClick={onImportClick}>
-            <Upload size={16} /> Import backup
+          <button disabled={busy} className="inline-flex items-center gap-2 rounded border px-3 py-2 disabled:opacity-60" onClick={onImportClick}>
+            <Upload size={16} /> Import my data
           </button>
           <input ref={fileInput} type="file" accept="application/json" className="hidden" onChange={onImportFile} />
         </div>
         {message && <p className="mt-3 text-sm text-[#21675d]">{message}</p>}
-        <p className="mt-4 text-xs text-[#657777]">
-          {supported
-            ? "Automatic backups run in the background once a day, rotating between 3 files in your chosen folder."
-            : "This browser doesn't support writing directly to a folder, so \"Backup now\" downloads a JSON file instead."}
-        </p>
       </section>
     </>
   );

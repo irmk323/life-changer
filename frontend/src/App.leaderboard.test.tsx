@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { User } from './services/firebase/auth';
 import { AppStateProvider } from './app/AppStateProvider';
 import { AuthProvider } from './app/AuthProvider';
+import { AppAuthGate } from './app/AppAuthGate';
 import App from './App';
 
 const { subscribeToAuthState, signInWithGoogle, signOutUser } = vi.hoisted(() => ({
@@ -30,9 +31,35 @@ vi.mock('./services/firebase/leaderboardProgressRepository', () => ({ subscribeA
 const { subscribeRecentActivities } = vi.hoisted(() => ({ subscribeRecentActivities: vi.fn() }));
 vi.mock('./services/firebase/leaderboardActivityRepository', () => ({ subscribeRecentActivities }));
 
+// Personal-data Firestore repositories used by AppStateProvider's loadInitialAppState.
+// Resolved empty so every page other than Leaderboard just renders a fresh/empty state.
+const { getDomainState } = vi.hoisted(() => ({ getDomainState: vi.fn() }));
+vi.mock('./services/firebase/userDataRepository', () => ({ getDomainState }));
+
+const { listUserEntities, createUserEntity, updateUserEntityFields, deleteUserEntity, getDailyLog, saveDailyLog, listWeeklyPlanItemsForRange } = vi.hoisted(() => ({
+  listUserEntities: vi.fn(),
+  createUserEntity: vi.fn(),
+  updateUserEntityFields: vi.fn(),
+  deleteUserEntity: vi.fn(),
+  getDailyLog: vi.fn(),
+  saveDailyLog: vi.fn(),
+  listWeeklyPlanItemsForRange: vi.fn(),
+}));
+vi.mock('./services/firebase/userEntityRepository', () => ({
+  listUserEntities, createUserEntity, updateUserEntityFields, deleteUserEntity, getDailyLog, saveDailyLog, listWeeklyPlanItemsForRange,
+}));
+
 const fakeUser = { uid: 'user-1', displayName: 'Maki' } as User;
 const fakeProfile = { uid: 'user-1', displayName: 'Maki', createdAt: 'a', updatedAt: 'a' };
 const fakeProgress = { uid: 'user-1', dsa: { completed: 1, total: 150, percentage: 1 }, ddia: { completed: 1, total: 12, percentage: 8 }, helloInterview: { completed: 0, total: 31, percentage: 0 }, updatedAt: 'a' };
+
+const renderApp = () => render(
+  <AuthProvider>
+    <AppAuthGate>
+      <AppStateProvider><App /></AppStateProvider>
+    </AppAuthGate>
+  </AuthProvider>,
+);
 
 describe('Leaderboard sign-in gating', () => {
   let authStateCallback: (user: User | null) => void;
@@ -50,6 +77,14 @@ describe('Leaderboard sign-in gating', () => {
     subscribeAllProfiles.mockReset().mockImplementation((cb: (all: unknown[]) => void) => { cb([fakeProfile]); return () => {}; });
     subscribeAllProgress.mockReset().mockImplementation((cb: (all: unknown[]) => void) => { cb([fakeProgress]); return () => {}; });
     subscribeRecentActivities.mockReset().mockImplementation((_limit: number, cb: (all: unknown[]) => void) => { cb([]); return () => {}; });
+    getDomainState.mockReset().mockResolvedValue({});
+    listUserEntities.mockReset().mockResolvedValue([]);
+    createUserEntity.mockReset().mockResolvedValue(undefined);
+    updateUserEntityFields.mockReset().mockResolvedValue(undefined);
+    deleteUserEntity.mockReset().mockResolvedValue(undefined);
+    getDailyLog.mockReset().mockResolvedValue(null);
+    saveDailyLog.mockReset().mockResolvedValue(undefined);
+    listWeeklyPlanItemsForRange.mockReset().mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -57,20 +92,24 @@ describe('Leaderboard sign-in gating', () => {
     localStorage.clear();
   });
 
-  it('shows a Google sign-in prompt when signed out, and the real leaderboard once signed in', async () => {
-    render(<AuthProvider><AppStateProvider><App /></AppStateProvider></AuthProvider>);
+  it('shows the Login screen when signed out, and the real leaderboard once signed in', async () => {
+    renderApp();
     authStateCallback(null);
-    await waitFor(() => expect(screen.getByText('Sign in with Google')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Continue with Google')).toBeInTheDocument());
     expect(screen.queryByText('Full ranking')).not.toBeInTheDocument();
 
     authStateCallback(fakeUser);
     await waitFor(() => expect(screen.getByText('Full ranking')).toBeInTheDocument());
   });
 
-  it('still renders other pages (e.g. Dashboard) without requiring sign-in', async () => {
+  it('requires sign-in for other pages too (e.g. Dashboard) — no localStorage fallback', async () => {
     window.location.hash = '#/dashboard';
-    render(<AuthProvider><AppStateProvider><App /></AppStateProvider></AuthProvider>);
+    renderApp();
     authStateCallback(null);
+    await waitFor(() => expect(screen.getByText('Continue with Google')).toBeInTheDocument());
+    expect(screen.queryByText('Your daily command center to prepare for your next role.')).not.toBeInTheDocument();
+
+    authStateCallback(fakeUser);
     await waitFor(() => expect(screen.getByText('Your daily command center to prepare for your next role.')).toBeInTheDocument());
   });
 
@@ -83,7 +122,7 @@ describe('Leaderboard sign-in gating', () => {
     subscribeAllProfiles.mockReset().mockImplementation((cb: (all: unknown[]) => void) => { cb(profiles); return () => {}; });
     subscribeAllProgress.mockReset().mockImplementation((cb: (all: unknown[]) => void) => { cb(progresses); return () => {}; });
 
-    render(<AuthProvider><AppStateProvider><App /></AppStateProvider></AuthProvider>);
+    renderApp();
     authStateCallback(fakeUser);
     await waitFor(() => expect(screen.getByText('Full ranking')).toBeInTheDocument());
 
@@ -98,7 +137,7 @@ describe('Leaderboard sign-in gating', () => {
 
   it('shows an empty-state message instead of an empty table when nobody has synced progress yet', async () => {
     subscribeAllProgress.mockReset().mockImplementation((cb: (all: unknown[]) => void) => { cb([]); return () => {}; });
-    render(<AuthProvider><AppStateProvider><App /></AppStateProvider></AuthProvider>);
+    renderApp();
     authStateCallback(fakeUser);
     await waitFor(() => expect(screen.getByText('No one has synced progress yet. Complete some tasks to appear here!')).toBeInTheDocument());
     expect(screen.queryByText('Full ranking')).not.toBeInTheDocument();
@@ -107,7 +146,7 @@ describe('Leaderboard sign-in gating', () => {
   it('shows a loading state before the Firestore subscriptions report back', async () => {
     subscribeAllProgress.mockReset().mockImplementation(() => () => {});
     subscribeAllProfiles.mockReset().mockImplementation(() => () => {});
-    render(<AuthProvider><AppStateProvider><App /></AppStateProvider></AuthProvider>);
+    renderApp();
     authStateCallback(fakeUser);
     await waitFor(() => expect(screen.getByText('Loading leaderboard…')).toBeInTheDocument());
     expect(screen.queryByText('Full ranking')).not.toBeInTheDocument();
@@ -125,7 +164,7 @@ describe('Leaderboard sign-in gating', () => {
     subscribeAllProfiles.mockReset().mockImplementation((cb: (all: unknown[]) => void) => { cb(profiles); return () => {}; });
     subscribeRecentActivities.mockReset().mockImplementation((_limit: number, cb: (all: unknown[]) => void) => { cb(activities); return () => {}; });
 
-    render(<AuthProvider><AppStateProvider><App /></AppStateProvider></AuthProvider>);
+    renderApp();
     authStateCallback(fakeUser);
     await waitFor(() => expect(screen.getByText('DDIA Chapter 7')).toBeInTheDocument());
 
@@ -141,14 +180,14 @@ describe('Leaderboard sign-in gating', () => {
   });
 
   it('shows an empty-state message for the activity feed when there is nothing recent', async () => {
-    render(<AuthProvider><AppStateProvider><App /></AppStateProvider></AuthProvider>);
+    renderApp();
     authStateCallback(fakeUser);
     await waitFor(() => expect(screen.getByText('No recent activity yet.')).toBeInTheDocument());
   });
 
   it('shows a loading state for the activity feed before it reports back', async () => {
     subscribeRecentActivities.mockReset().mockImplementation(() => () => {});
-    render(<AuthProvider><AppStateProvider><App /></AppStateProvider></AuthProvider>);
+    renderApp();
     authStateCallback(fakeUser);
     await waitFor(() => expect(screen.getByText('Loading recent activity…')).toBeInTheDocument());
   });

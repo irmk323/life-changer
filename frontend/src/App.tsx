@@ -8,7 +8,7 @@ import {
   useNavigate,
   useParams,
 } from "react-router";
-import { Calendar, Home, BookOpen, Code2, Network, Brain, Pencil, ArrowUp, ArrowDown, AlarmClock, CalendarDays, CheckCircle2, ClipboardList, Flame, GripVertical, Plus, Sparkles, Target, TrendingUp, Trash2, Save, Trophy, Crown, LogIn } from "lucide-react";
+import { Calendar, Home, BookOpen, Code2, Network, Brain, Pencil, ArrowUp, ArrowDown, AlarmClock, CalendarDays, CheckCircle2, ClipboardList, Flame, GripVertical, Plus, Sparkles, Target, TrendingUp, Trash2, Save, Trophy, Crown } from "lucide-react";
 import { useEffect, useRef, useState, type ElementType, type FormEvent } from "react";
 import {
   DomainProgress,
@@ -21,12 +21,15 @@ import {
 import { Backup } from "./components/Backup";
 import { useAppState } from "./app/AppStateProvider";
 import { useAuth } from "./app/AuthProvider";
-import { ProfileGate, useProfile } from "./app/ProfileGate";
+import { useProfile } from "./app/ProfileGate";
+import { useAutosaveField } from "./app/useAutosaveField";
+import { getDsaNotes, saveDsaNotes, type DsaNotes } from "./services/firebase/dsaNotesRepository";
+import { getDailyLog, saveDailyLog } from "./services/firebase/userEntityRepository";
 import { LeaderboardSyncProvider } from "./app/LeaderboardSyncProvider";
 import { subscribeAllProgress, type StoredLeaderboardProgress } from "./services/firebase/leaderboardProgressRepository";
 import { subscribeAllProfiles } from "./services/firebase/profile";
 import { subscribeRecentActivities, type StoredLeaderboardActivity } from "./services/firebase/leaderboardActivityRepository";
-import { sampleData } from "./data/sampleData";
+import { resetMyData } from "./app/resetUserData";
 import {
   dueState,
   progress,
@@ -69,8 +72,19 @@ const LEADERBOARD_DOMAINS = [
   { key: "DSA", label: "DSA", icon: Code2, unit: "problems" },
 ] as const;
 function Shell({ children }: { children: React.ReactNode }) {
-  const { dispatch } = useAppState();
+  const { reload } = useAppState();
   const { user, signOut } = useAuth();
+  const [resetting, setResetting] = useState(false);
+  const handleReset = async () => {
+    if (!user || !confirm("Reset all of your data back to a fresh start? This cannot be undone.")) return;
+    setResetting(true);
+    try {
+      await resetMyData(user.uid);
+      await reload();
+    } finally {
+      setResetting(false);
+    }
+  };
   return (
     <div className="min-h-screen bg-[#f6f8f7] text-[#203334]">
       <aside className="fixed hidden h-screen w-60 bg-[#183d3a] p-4 text-[#e8f2ef] md:block">
@@ -100,12 +114,10 @@ function Shell({ children }: { children: React.ReactNode }) {
         )}
         <button
           className="mt-auto w-full rounded border border-[#6f9790] px-3 py-2 text-sm text-[#dce9e6] hover:bg-[#24514c]"
-          onClick={() =>
-            confirm("Reset all data to the sample data?") &&
-            dispatch({ type: "REPLACE", payload: sampleData() })
-          }
+          onClick={() => void handleReset()}
+          disabled={resetting}
         >
-          Reset sample data
+          {resetting ? "Resetting…" : "Reset my data"}
         </button>
       </aside>
       <main className="mx-auto max-w-[1500px] p-4 md:ml-60 md:p-8">{children}</main>
@@ -415,7 +427,7 @@ function Questions({ kind }: { kind: "BEHAVIOUR" | "JAVA_THEORY" | "DDIA" }) {
   const chapterRecord = chapterKey ? state.ddiaChapters.find((c: any) => c.id === chapterKey) : null;
   const saveChapter = (patch: any) => {
     if (!chapterKey) return;
-    dispatch({ type: "UPSERT", payload: { collection: "ddiaChapters", item: { id: chapterKey, status: "NOT_STARTED", notes: "", ...chapterRecord, ...patch } } });
+    dispatch({ type: "UPSERT", payload: { collection: "ddiaChapters", item: { id: chapterKey, ...patch } } });
   };
   return (
     <>
@@ -493,15 +505,26 @@ function Questions({ kind }: { kind: "BEHAVIOUR" | "JAVA_THEORY" | "DDIA" }) {
         <section className="lc-panel mt-4 rounded-xl border bg-white p-4">
           <h2 className="font-bold">Learning notes</h2>
           <p className="mb-2 text-sm text-[#657777]">Key takeaways and things to revisit from this chapter.</p>
-          <textarea
-            className="min-h-40 w-full rounded border p-2"
-            defaultValue={chapterRecord?.notes || ""}
-            placeholder="What stood out in this chapter?"
-            onBlur={(e) => saveChapter({ notes: e.target.value })}
-          />
+          <DdiaChapterNotesField key={chapterKey} initialValue={chapterRecord?.notes || ""} onSave={(value) => saveChapter({ notes: value })} />
         </section>
       )}
     </>
+  );
+}
+// Keyed by chapterKey at the call site so switching DDIA chapters (a route param change
+// that does not remount Questions) gets a fresh useAutosaveField instance instead of
+// reusing the previous chapter's stale value/timer — see DsaNotesFieldsLoaded for the same
+// "hook state must be re-mounted, not just re-rendered" principle.
+function DdiaChapterNotesField({ initialValue, onSave }: { initialValue: string; onSave: (value: string) => void }) {
+  const chapterNotes = useAutosaveField(initialValue, onSave);
+  return (
+    <textarea
+      className="min-h-40 w-full rounded border p-2"
+      value={chapterNotes.value}
+      placeholder="What stood out in this chapter?"
+      onChange={(e) => chapterNotes.onChange(e.target.value)}
+      onBlur={chapterNotes.onBlur}
+    />
   );
 }
 function FirstSolvedCell({ p, dispatch }: { p: any; dispatch: any }) {
@@ -650,14 +673,75 @@ function Dsa() {
     </>
   );
 }
+function DsaNotesFields({ problemId, stages }: { problemId: string; stages: string[] }) {
+  const { user } = useAuth();
+  const [notes, setNotes] = useState<DsaNotes | null>(null);
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    getDsaNotes(user.uid, problemId).then((result) => {
+      if (!cancelled) setNotes(result ?? { initialNotes: "", generalNotes: "", reviewNotes: { D1: "", D4: "", D17: "" }, updatedAt: "" });
+    });
+    return () => { cancelled = true; };
+  }, [user, problemId]);
+
+  const save = (patch: Parameters<typeof saveDsaNotes>[2]) => { if (user) void saveDsaNotes(user.uid, problemId, patch); };
+
+  if (!notes) return <p className="mt-4 text-sm text-[#657777]">Loading notes…</p>;
+
+  return (
+    <DsaNotesFieldsLoaded notes={notes} stages={stages} save={save} />
+  );
+}
+// Only mounted once `notes` has actually loaded from Firestore — useAutosaveField's
+// internal useState(initialValue) only honors the value on this component's first render,
+// so mounting it earlier (while notes is still null) would permanently lock the fields to
+// an empty string even after the real value arrives.
+function DsaNotesFieldsLoaded({ notes, stages, save }: { notes: DsaNotes; stages: string[]; save: (patch: Parameters<typeof saveDsaNotes>[2]) => void }) {
+  const initialNotesField = useAutosaveField(notes.initialNotes, (value) => save({ initialNotes: value }));
+  const generalNotesField = useAutosaveField(notes.generalNotes, (value) => save({ generalNotes: value }));
+
+  return (
+    <>
+      <label>
+        Initial solve notes
+        <textarea
+          value={initialNotesField.value}
+          onChange={(e) => initialNotesField.onChange(e.target.value)}
+          onBlur={initialNotesField.onBlur}
+          className="mt-1 w-full rounded border p-2"
+        />
+      </label>
+      {stages.map((stage) => (
+        <DsaReviewNoteField key={stage} stage={stage} initialValue={notes.reviewNotes[stage as keyof DsaNotes["reviewNotes"]] ?? ""} onSave={(value) => save({ reviewNotes: { [stage]: value } })} />
+      ))}
+      <label className="mt-3 block">
+        General notes
+        <textarea
+          value={generalNotesField.value}
+          onChange={(e) => generalNotesField.onChange(e.target.value)}
+          onBlur={generalNotesField.onBlur}
+          className="mt-1 w-full rounded border p-2"
+        />
+      </label>
+    </>
+  );
+}
+function DsaReviewNoteField({ stage, initialValue, onSave }: { stage: string; initialValue: string; onSave: (value: string) => void }) {
+  const field = useAutosaveField(initialValue, onSave);
+  return (
+    <label className="mt-3 block">
+      {stage} review note
+      <textarea value={field.value} onChange={(e) => field.onChange(e.target.value)} onBlur={field.onBlur} className="mt-1 w-full rounded border p-2" />
+    </label>
+  );
+}
 function DsaDetail() {
   const { id = "" } = useParams(),
-    { state, dispatch } = useAppState(),
+    { state } = useAppState(),
     nav = useNavigate();
   const p = state.dsa.find((x: any) => x.id === id);
   if (!p) return <Navigate to="/dsa" />;
-  const save = (field: string, value: string) =>
-    dispatch({ type: "DSA_UPDATE", payload: { ...p, [field]: value } });
   return (
     <>
       <PageHeader title={p.title}>
@@ -672,42 +756,7 @@ function DsaDetail() {
         Open in LeetCode ↗
       </a>
       <section className="mt-4 rounded-xl border bg-white p-4">
-        <label>
-          Initial solve notes
-          <textarea
-            defaultValue={p.initialNotes}
-            onBlur={(e) => save("initialNotes", e.target.value)}
-            className="mt-1 w-full rounded border p-2"
-          />
-        </label>
-        {p.reviews.map((r: any) => (
-          <label className="mt-3 block" key={r.stage}>
-            {r.stage} review note
-            <textarea
-              defaultValue={r.note}
-              onBlur={(e) =>
-                dispatch({
-                  type: "DSA_UPDATE",
-                  payload: {
-                    ...p,
-                    reviews: p.reviews.map((x: any) =>
-                      x.stage === r.stage ? { ...x, note: e.target.value } : x,
-                    ),
-                  },
-                })
-              }
-              className="mt-1 w-full rounded border p-2"
-            />
-          </label>
-        ))}
-        <label className="mt-3 block">
-          General notes
-          <textarea
-            defaultValue={p.generalNotes}
-            onBlur={(e) => save("generalNotes", e.target.value)}
-            className="mt-1 w-full rounded border p-2"
-          />
-        </label>
+        <DsaNotesFields key={id} problemId={id} stages={p.reviews.map((r: any) => r.stage)} />
       </section>
     </>
   );
@@ -786,12 +835,36 @@ function WeeklyPlan() {
     </section>
   </>;
 }
+function DailyNoteField({ day }: { day: string }) {
+  const { user } = useAuth();
+  const [note, setNote] = useState<string | null>(null);
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    getDailyLog(user.uid, day).then((result) => { if (!cancelled) setNote(result?.note ?? ""); });
+    return () => { cancelled = true; };
+  }, [user, day]);
+  if (note === null) return <p className="mt-2 text-sm text-[#657777]">Loading…</p>;
+  return <DailyNoteFieldLoaded note={note} onSave={(value) => { if (user) void saveDailyLog(user.uid, day, value); }} />;
+}
+// Only mounted once `note` has actually loaded — see DsaNotesFieldsLoaded for why.
+function DailyNoteFieldLoaded({ note, onSave }: { note: string; onSave: (value: string) => void }) {
+  const field = useAutosaveField(note, onSave);
+  return (
+    <textarea
+      value={field.value}
+      onChange={(e) => field.onChange(e.target.value)}
+      onBlur={field.onBlur}
+      placeholder="What felt clear? What needs repair?"
+      className="mt-2 min-h-36 w-full rounded border p-2"
+    />
+  );
+}
 function CalendarPage() {
-  const { state, dispatch } = useAppState(),
+  const { state } = useAppState(),
     [day, setDay] = useState(localDate()),
     [month, setMonth] = useState(() => new Date());
-  const log = state.dailyLogs.find((x: any) => x.date === day),
-    first = new Date(month.getFullYear(), month.getMonth(), 1),
+  const first = new Date(month.getFullYear(), month.getMonth(), 1),
     start = new Date(first);
   start.setDate(1 - first.getDay());
   const colours: any = {
@@ -929,24 +1002,10 @@ function CalendarPage() {
         <div className="lc-panel rounded-xl border bg-white p-4">
           <label className="block font-semibold">
             Daily note
-            <textarea
-              defaultValue={log?.note || ""}
-              placeholder="What felt clear? What needs repair?"
-              onBlur={(e) =>
-                dispatch({
-                  type: "DAILY_LOG_SAVE",
-                  payload: {
-                    id: `daily-log-${day}`,
-                    date: day,
-                    note: e.target.value,
-                  },
-                })
-              }
-              className="mt-2 min-h-36 w-full rounded border p-2"
-            />
+            <DailyNoteField key={day} day={day} />
           </label>
           <p className="mt-2 text-sm text-[#657777]">
-            Saved automatically when you leave the field.
+            Saved automatically a few seconds after you stop typing, or when you leave the field.
           </p>
         </div>
       </section>
@@ -1047,38 +1106,6 @@ function HelloInterviewPage() {
             })}
           </tbody>
         </table>
-      </section>
-    </>
-  );
-}
-function LeaderboardSignInPrompt() {
-  const { signIn, error } = useAuth();
-  const [pending, setPending] = useState(false);
-  const handleSignIn = async () => {
-    setPending(true);
-    try {
-      await signIn();
-    } catch {
-      // surfaced via useAuth().error below
-    } finally {
-      setPending(false);
-    }
-  };
-  return (
-    <>
-      <PageHeader title="Leaderboard" subtitle="Sign in with Google to compare progress with others." />
-      <section className="lc-panel rounded-xl border bg-white p-8 text-center">
-        <Trophy size={32} className="mx-auto mb-3 text-[#21675d]" />
-        <p className="mb-4 text-[#657777]">Sign in with your Google account to see the shared leaderboard.</p>
-        <button
-          type="button"
-          className="dashboard-primary mx-auto"
-          onClick={() => void handleSignIn()}
-          disabled={pending}
-        >
-          <LogIn size={16} /> {pending ? "Signing in…" : "Sign in with Google"}
-        </button>
-        {error && <p className="mt-3 text-sm text-[#923d36]">{error}</p>}
       </section>
     </>
   );
@@ -1218,15 +1245,14 @@ function useLeaderboardActivities(currentUid: string | undefined): { loading: bo
   return { loading: !activitiesLoaded || !profilesLoaded, activities };
 }
 function LeaderboardPage() {
-  const { user, loading } = useAuth();
+  // Reached only once AppAuthGate/ProfileGate confirm a signed-in user with a profile.
+  const { user } = useAuth();
   const { profile } = useProfile();
   const [tab, setTab] = useState<(typeof LEADERBOARD_DOMAINS)[number]["key"]>("DDIA");
   const [editingName, setEditingName] = useState(false);
   const { loading: entriesLoading, entries } = useLeaderboardEntries(user?.uid);
   const { loading: activitiesLoading, activities } = useLeaderboardActivities(user?.uid);
-  if (loading) return null;
-  if (!user) return <LeaderboardSignInPrompt />;
-  if (!profile) return null;
+  if (!user || !profile) return null;
   const activeDomain = LEADERBOARD_DOMAINS.find((d) => d.key === tab)!;
   const ranked = entries
     .map((u) => {
@@ -1345,6 +1371,19 @@ function LeaderboardPage() {
     </>
   );
 }
+function TaskTextField({ label, value, onSave, multiline = false }: { label: string; value: string; onSave: (value: string) => void; multiline?: boolean }) {
+  const field = useAutosaveField(value, onSave);
+  return (
+    <label className="mt-4 grid gap-1 font-semibold">
+      {label}
+      {multiline ? (
+        <textarea className="min-h-28 rounded border p-2" value={field.value} onChange={(e) => field.onChange(e.target.value)} onBlur={field.onBlur} />
+      ) : (
+        <input value={field.value} onChange={(e) => field.onChange(e.target.value)} onBlur={field.onBlur} />
+      )}
+    </label>
+  );
+}
 function Tasks({ system = false }: { system?: boolean }) {
   const { state, dispatch } = useAppState(),
     nav = useNavigate(),
@@ -1365,7 +1404,7 @@ function Tasks({ system = false }: { system?: boolean }) {
     const update = (patch: any) =>
       dispatch({
         type: "UPSERT",
-        payload: { collection, item: { ...task, ...patch } },
+        payload: { collection, item: { id: task.id, ...patch } },
       });
     const detailFields = system
       ? [
@@ -1383,7 +1422,7 @@ function Tasks({ system = false }: { system?: boolean }) {
           ["validation", "Validation"], ["errors", "Error handling"], ["tests", "Test cases"],
           ["notes", "Design notes"], ["link", "Repository link"], ["improvement", "Next improvement"],
         ];
-    if (system) return <SystemDesignDetail task={task} update={update} learningItems={state.learningItems} dispatch={dispatch} onDelete={() => confirm("Delete this task?") && dispatch({ type: "DELETE", payload: { collection, id: task.id } })} onBack={() => nav("/system-design/hello-interview")} />;
+    if (system) return <SystemDesignDetail key={task.id} task={task} update={update} learningItems={state.learningItems} dispatch={dispatch} onDelete={() => confirm("Delete this task?") && dispatch({ type: "DELETE", payload: { collection, id: task.id } })} onBack={() => nav("/system-design/hello-interview")} />;
     return (
       <>
         <PageHeader title={task.title}>
@@ -1405,15 +1444,9 @@ function Tasks({ system = false }: { system?: boolean }) {
               Edit the exercise context and design notes. Changes save when you
               leave a field.
             </p>
-            <label className="grid gap-1 font-semibold">
-              Category
-              <input
-                defaultValue={task.category}
-                onBlur={(e) => update({ category: e.target.value })}
-              />
-            </label>
-            {!system && <label className="mt-4 grid gap-1 font-semibold">Tags<input defaultValue={String(task.tags || "")} onBlur={(e) => update({ tags: e.target.value })} /></label>}
-            {detailFields.map(([key, label]) => <label className="mt-4 grid gap-1 font-semibold" key={key}>{label}<textarea className="min-h-28 rounded border p-2" defaultValue={String(task[key] || "")} onBlur={(e) => update({ [key]: e.target.value })} /></label>)}
+            <TaskTextField key={`${task.id}-category`} label="Category" value={task.category} onSave={(value) => update({ category: value })} />
+            {!system && <TaskTextField key={`${task.id}-tags`} label="Tags" value={String(task.tags || "")} onSave={(value) => update({ tags: value })} />}
+            {detailFields.map(([key, label]) => <TaskTextField key={`${task.id}-${key}`} label={label} value={String(task[key] || "")} onSave={(value) => update({ [key]: value })} multiline />)}
             <button
               className="mt-5 rounded border px-3 py-2 text-[#923d36]"
               onClick={() =>
@@ -1585,6 +1618,7 @@ function Tasks({ system = false }: { system?: boolean }) {
 function SystemDesignDetail({ task, update, onDelete, onBack, learningItems, dispatch }: { task: any; update: (patch: any) => void; onDelete: () => void; onBack: () => void; learningItems: any[]; dispatch: any }) {
   const [questionText, setQuestionText] = useState("");
   const [attemptOpen, setAttemptOpen] = useState(false);
+  const notesField = useAutosaveField(String(task.notes || ""), (value) => update({ notes: value }));
   const attempts = Array.isArray(task.attempts) ? task.attempts : [];
   const questions = learningItems.filter((x: any) => x.domain === "SYSTEM_DESIGN" && x.track === task.id);
   const addQuestion = (event: FormEvent<HTMLFormElement>) => {
@@ -1634,7 +1668,7 @@ function SystemDesignDetail({ task, update, onDelete, onBack, learningItems, dis
     <section className="lc-panel mb-4 rounded-xl border bg-white p-5">
       <h2 className="font-bold">Learning notes</h2>
       <p className="mb-3 text-sm text-[#657777]">Key decisions, trade-offs, and improvements for next time.</p>
-      <textarea aria-label="Learning notes" className="min-h-48 w-full" defaultValue={String(task.notes || "")} placeholder="For example: clarify requirements first, estimate peak traffic, and explain the cache invalidation strategy…" onBlur={(event) => update({ notes: event.target.value })} />
+      <textarea aria-label="Learning notes" className="min-h-48 w-full" value={notesField.value} placeholder="For example: clarify requirements first, estimate peak traffic, and explain the cache invalidation strategy…" onChange={(event) => notesField.onChange(event.target.value)} onBlur={notesField.onBlur} />
     </section>
     <section className="lc-panel mb-4 rounded-xl border bg-white p-5">
       <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-bold">Attempt record</h2><p className="text-sm text-[#657777]">Record the outcome and what to improve after each practice.</p></div><button className="bg-[#21675d] text-white" onClick={() => setAttemptOpen(!attemptOpen)}>{attemptOpen ? "Cancel" : "Record attempt"}</button></div>
@@ -1734,7 +1768,7 @@ export default function App() {
           <Route path="/functional-coding/:id" element={<Tasks />} />
           <Route path="/system-design" element={<SystemDesignPage />} />
           <Route path="/backup" element={<Backup />} />
-          <Route path="/leaderboard" element={<ProfileGate><LeaderboardPage /></ProfileGate>} />
+          <Route path="/leaderboard" element={<LeaderboardPage />} />
           <Route
             path="/system-design/ddia/:chapterId"
             element={<Questions kind="DDIA" />}

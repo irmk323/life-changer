@@ -10,7 +10,7 @@ const dsaProblem = (id: string, firstSolvedAt: string | null): DsaProblem => ({
 
 const chapter = (id: string, status: ChapterStatus['status']): ChapterStatus => ({ id, status, notes: '' });
 
-const task = (id: string, status: Task['status']): Task => ({ id, title: id, category: 'System design', status, attempts: [] });
+const task = (id: string, status: Task['status'], source?: Task['source']): Task => ({ id, title: id, category: 'System design', status, attempts: [], ...(source ? { source } : {}) });
 
 const baseState = (overrides: Partial<AppState> = {}): AppState => ({
   version: 1, motivationEntries: [], learningItems: [], attempts: [], reviews: [],
@@ -48,6 +48,22 @@ describe('calculateLeaderboardProgress', () => {
   it('counts Hello Interview tasks with status INTERVIEW_READY, out of every task currently in state', () => {
     const state = baseState({ systemDesignTasks: [task('t1', 'INTERVIEW_READY'), task('t2', 'IN_PROGRESS'), task('t3', 'INTERVIEW_READY'), task('t4', 'NOT_STARTED')] });
     expect(calculateLeaderboardProgress(state).helloInterview).toEqual({ completed: 2, total: 4, percentage: 50 });
+  });
+
+  it('excludes CUSTOM Hello Interview tasks from both the numerator and the denominator', () => {
+    const state = baseState({
+      systemDesignTasks: [
+        task('t1', 'INTERVIEW_READY', 'BUILT_IN'),
+        task('t2', 'NOT_STARTED', 'BUILT_IN'),
+        task('t3', 'INTERVIEW_READY', 'CUSTOM'),
+      ],
+    });
+    expect(calculateLeaderboardProgress(state).helloInterview).toEqual({ completed: 1, total: 2, percentage: 50 });
+  });
+
+  it('treats a task with no source field as built-in (backward compatibility with pre-2G data)', () => {
+    const state = baseState({ systemDesignTasks: [task('t1', 'INTERVIEW_READY')] });
+    expect(calculateLeaderboardProgress(state).helloInterview.total).toBe(1);
   });
 
   it('returns 0 percentage instead of NaN when a domain has no items', () => {

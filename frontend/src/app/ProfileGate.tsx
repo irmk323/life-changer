@@ -66,17 +66,15 @@ function ProfileSetupForm({ uid, defaultDisplayName, onCreated }: {
   );
 }
 
+// Only ever mounted by AppAuthGate once a signed-in user is confirmed, so `user` is
+// guaranteed non-null here — AppAuthGate owns the auth-loading and signed-out states.
 export function ProfileGate({ children }: { children: React.ReactNode }) {
-  const { user, loading: authLoading } = useAuth();
+  const { user } = useAuth();
   const [profile, setProfile] = useState<LeaderboardProfile | null>(null);
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    if (!user) {
-      setProfile(null);
-      setChecking(false);
-      return;
-    }
+    if (!user) return;
     let cancelled = false;
     setChecking(true);
     getProfile(user.uid)
@@ -90,9 +88,8 @@ export function ProfileGate({ children }: { children: React.ReactNode }) {
     setProfile(await updateProfile(profile, displayName));
   };
 
-  if (authLoading) return null;
-  if (user && checking) return null;
-  if (user && !profile) {
+  if (!user || checking) return null;
+  if (!profile) {
     return <ProfileSetupForm uid={user.uid} defaultDisplayName={user.displayName ?? ''} onCreated={setProfile} />;
   }
 

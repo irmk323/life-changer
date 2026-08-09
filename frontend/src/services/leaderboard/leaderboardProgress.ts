@@ -15,18 +15,20 @@ const DDIA_CHAPTER_COUNT = new Set(ddiaQuestions.map((q) => q.chapter)).size;
 
 const percentage = (completed: number, total: number) => (total ? Math.round((completed / total) * 100) : 0);
 
-// state.systemDesignTasks ("Hello Interview") has no field distinguishing built-in
-// curriculum tasks from custom ones, but the "Add task" UI for this list was removed
-// so it only ever holds the built-in curriculum. See docs/firebase-leaderboard-tasks.md
-// (Phase 2A) for background.
+// state.systemDesignTasks ("Hello Interview") only counts built-in curriculum tasks
+// toward the Leaderboard denominator. Custom tasks (source: 'CUSTOM', added in Phase 2G)
+// don't affect the comparison between users. Tasks predating the `source` field (or
+// otherwise missing it) are treated as built-in for backward compatibility — the
+// "Add task" UI was removed in Phase 2A, so no pre-2G data can be genuinely custom.
 export const calculateLeaderboardProgress = (state: AppState): LeaderboardProgress => {
   const dsaProgress = progress(state.dsa, true);
 
   const ddiaCompleted = Array.from({ length: DDIA_CHAPTER_COUNT }, (_, i) => `CHAPTER_${i + 1}`)
     .filter((id) => state.ddiaChapters.find((c) => c.id === id)?.status === 'DONE').length;
 
-  const helloInterviewCompleted = state.systemDesignTasks.filter((t) => t.status === 'INTERVIEW_READY').length;
-  const helloInterviewTotal = state.systemDesignTasks.length;
+  const builtInHelloInterviewTasks = state.systemDesignTasks.filter((t) => t.source !== 'CUSTOM');
+  const helloInterviewCompleted = builtInHelloInterviewTasks.filter((t) => t.status === 'INTERVIEW_READY').length;
+  const helloInterviewTotal = builtInHelloInterviewTasks.length;
 
   return {
     dsa: { completed: dsaProgress.done, total: dsaProgress.total, percentage: dsaProgress.percentage },

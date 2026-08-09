@@ -1,5 +1,5 @@
 import { initializeApp, type FirebaseApp } from 'firebase/app';
-import { getAuth, type Auth } from 'firebase/auth';
+import { browserLocalPersistence, getAuth, setPersistence, type Auth } from 'firebase/auth';
 import { getFirestore, type Firestore } from 'firebase/firestore';
 import { readFirebaseConfig } from './firebaseEnv';
 
@@ -18,3 +18,9 @@ try {
 
 export const auth: Auth | null = firebaseApp ? getAuth(firebaseApp) : null;
 export const db: Firestore | null = firebaseApp ? getFirestore(firebaseApp) : null;
+
+// Keep the session in this browser/origin until the user explicitly signs out (per Phase
+// 2G auth requirements), rather than Firebase's SSO-style default of clearing on tab close.
+if (auth) {
+  void setPersistence(auth, browserLocalPersistence);
+}
