@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { User } from './services/firebase/auth';
 import { AppStateProvider } from './app/AppStateProvider';
@@ -152,7 +152,9 @@ describe('Leaderboard sign-in gating', () => {
     expect(screen.queryByText('Full ranking')).not.toBeInTheDocument();
   });
 
-  it('renders recent activities from Firestore, newest first, with a "You" tag for the current user', async () => {
+  const formatUk = (iso: string) => new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(iso));
+
+  it('shows recent activities only for the currently selected domain tab, with a UK-formatted date and a "You" tag', async () => {
     const now = new Date();
     const today = now.toISOString();
     const yesterday = new Date(now.getTime() - 86400000 - 1000).toISOString();
@@ -166,20 +168,47 @@ describe('Leaderboard sign-in gating', () => {
 
     renderApp();
     authStateCallback(fakeUser);
+    // DDIA is the default tab: only the DDIA activity should show, not the DSA one.
     await waitFor(() => expect(screen.getByText('DDIA Chapter 7')).toBeInTheDocument());
+    expect(screen.queryByText('Two Sum')).not.toBeInTheDocument();
 
-    const rows = document.querySelectorAll('.leaderboard-activity-row');
-    expect(rows).toHaveLength(2);
+    let rows = document.querySelectorAll('.leaderboard-activity-row');
+    expect(rows).toHaveLength(1);
     expect(rows[0].textContent).toContain('Maki');
     expect(rows[0].textContent).toContain('You');
-    expect(rows[0].textContent).toContain('DDIA Chapter 7');
-    expect(rows[0].textContent).toContain('Today');
-    expect(rows[1].textContent).toContain('Alex');
-    expect(rows[1].textContent).toContain('Two Sum');
-    expect(rows[1].textContent).toContain('Yesterday');
+    expect(rows[0].textContent).toContain(formatUk(today));
+
+    // Switching to the DSA tab swaps the feed to DSA-only activities.
+    fireEvent.click(screen.getByRole('button', { name: /^DSA$/ }));
+    await waitFor(() => expect(screen.getByText('Two Sum')).toBeInTheDocument());
+    expect(screen.queryByText('DDIA Chapter 7')).not.toBeInTheDocument();
+
+    rows = document.querySelectorAll('.leaderboard-activity-row');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].textContent).toContain('Alex');
+    expect(rows[0].textContent).toContain(formatUk(yesterday));
   });
 
-  it('shows an empty-state message for the activity feed when there is nothing recent', async () => {
+  it('caps the feed to the 10 most recent activities for the active domain', async () => {
+    const now = Date.now();
+    const activities = Array.from({ length: 15 }, (_, i) => ({
+      uid: 'user-1',
+      domain: 'DDIA',
+      label: `Chapter ${i}`,
+      occurredAt: new Date(now - i * 60000).toISOString(),
+    }));
+    subscribeRecentActivities.mockReset().mockImplementation((_limit: number, cb: (all: unknown[]) => void) => { cb(activities); return () => {}; });
+
+    renderApp();
+    authStateCallback(fakeUser);
+    await waitFor(() => expect(screen.getByText('Chapter 0')).toBeInTheDocument());
+
+    const rows = document.querySelectorAll('.leaderboard-activity-row');
+    expect(rows).toHaveLength(10);
+    expect(screen.queryByText('Chapter 10')).not.toBeInTheDocument();
+  });
+
+  it('shows an empty-state message for the activity feed when there is nothing recent for the active domain', async () => {
     renderApp();
     authStateCallback(fakeUser);
     await waitFor(() => expect(screen.getByText('No recent activity yet.')).toBeInTheDocument());

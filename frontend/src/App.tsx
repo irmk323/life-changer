@@ -5,6 +5,7 @@ import {
   Navigate,
   Route,
   Routes,
+  useLocation,
   useNavigate,
   useParams,
 } from "react-router";
@@ -29,7 +30,7 @@ import { LeaderboardSyncProvider } from "./app/LeaderboardSyncProvider";
 import { subscribeAllProgress, type StoredLeaderboardProgress } from "./services/firebase/leaderboardProgressRepository";
 import { subscribeAllProfiles } from "./services/firebase/profile";
 import { subscribeRecentActivities, type StoredLeaderboardActivity } from "./services/firebase/leaderboardActivityRepository";
-import { resetMyData } from "./app/resetUserData";
+import { ErrorBoundary } from "./app/ErrorBoundary";
 import {
   dueState,
   progress,
@@ -40,18 +41,18 @@ import {
 } from "./services/readiness/calculations";
 const nav = [
   ["/dashboard", "Dashboard", Home],
-  ["/motivation", "Motivation", Brain],
+  ["/motivation", "Decision Balance", Brain],
   ["/weekly-plan", "Weekly Plan", CalendarDays],
   ["/calendar", "Calendar", Calendar],
   ["/behaviour", "Behaviour", BookOpen],
   ["/java", "Java Theory", BookOpen],
   ["/dsa", "DSA", Code2],
-  ["/functional-coding", "Functional Coding", Code2],
+  ["/functional-coding", "Practical Coding", Code2],
   ["/system-design", "System Design", Network],
   ["/backup", "Backup", Save],
   ["/leaderboard", "Leaderboard", Trophy],
 ] as const;
-const DOMAIN_LABELS: Record<string, string> = { DSA: "DSA", JAVA_THEORY: "Java Theory", BEHAVIOUR: "Behaviour", FUNCTIONAL_CODING: "Functional Coding", SYSTEM_DESIGN: "System Design", DDIA: "DDIA" };
+const DOMAIN_LABELS: Record<string, string> = { DSA: "DSA", JAVA_THEORY: "Java Theory", BEHAVIOUR: "Behaviour", FUNCTIONAL_CODING: "Practical Coding", SYSTEM_DESIGN: "System Design", DDIA: "DDIA" };
 const DDIA_CHAPTERS = [
   "Reliable, scalable, maintainable applications",
   "Data models and query languages",
@@ -72,19 +73,7 @@ const LEADERBOARD_DOMAINS = [
   { key: "DSA", label: "DSA", icon: Code2, unit: "problems" },
 ] as const;
 function Shell({ children }: { children: React.ReactNode }) {
-  const { reload } = useAppState();
   const { user, signOut } = useAuth();
-  const [resetting, setResetting] = useState(false);
-  const handleReset = async () => {
-    if (!user || !confirm("Reset all of your data back to a fresh start? This cannot be undone.")) return;
-    setResetting(true);
-    try {
-      await resetMyData(user.uid);
-      await reload();
-    } finally {
-      setResetting(false);
-    }
-  };
   return (
     <div className="min-h-screen bg-[#f6f8f7] text-[#203334]">
       <aside className="fixed hidden h-screen w-60 bg-[#183d3a] p-4 text-[#e8f2ef] md:block">
@@ -112,13 +101,6 @@ function Shell({ children }: { children: React.ReactNode }) {
             </button>
           </div>
         )}
-        <button
-          className="mt-auto w-full rounded border border-[#6f9790] px-3 py-2 text-sm text-[#dce9e6] hover:bg-[#24514c]"
-          onClick={() => void handleReset()}
-          disabled={resetting}
-        >
-          {resetting ? "Resetting…" : "Reset my data"}
-        </button>
       </aside>
       <main className="mx-auto max-w-[1500px] p-4 md:ml-60 md:p-8">{children}</main>
     </div>
@@ -329,7 +311,7 @@ function Dashboard() {
             ["Behaviour", "BEHAVIOUR"],
             ["Java Theory", "JAVA_THEORY"],
             ["DSA", "DSA"],
-            ["Functional Coding", "FUNCTIONAL_CODING"],
+            ["Practical Coding", "FUNCTIONAL_CODING"],
             ["DDIA", "DDIA"],
             ["Hello Interview", "SYSTEM_DESIGN"],
           ].map(([label, x]) => {
@@ -427,7 +409,12 @@ function Questions({ kind }: { kind: "BEHAVIOUR" | "JAVA_THEORY" | "DDIA" }) {
   const chapterRecord = chapterKey ? state.ddiaChapters.find((c: any) => c.id === chapterKey) : null;
   const saveChapter = (patch: any) => {
     if (!chapterKey) return;
+    const wasNotDone = chapterRecord?.status !== "DONE";
     dispatch({ type: "UPSERT", payload: { collection: "ddiaChapters", item: { id: chapterKey, ...patch } } });
+    if (patch.status === "DONE" && wasNotDone) {
+      const today = localDate();
+      dispatch({ type: "UPSERT", payload: { collection: "activities", item: { id: `activity-ddia-${chapterKey}-${today}`, date: today, domain: "DDIA", itemId: chapterKey, label: `DDIA Chapter ${chapterKey.replace("CHAPTER_", "")}`, result: "PASS", durationMinutes: 0 } } });
+    }
   };
   return (
     <>
@@ -531,6 +518,7 @@ function FirstSolvedCell({ p, dispatch }: { p: any; dispatch: any }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const markSolved = (value: string) => {
     if (!value) return;
+    const isFirstSolve = !p.firstSolvedAt;
     const reviews =
       p.reviews && p.reviews.length > 0
         ? p.reviews
@@ -543,6 +531,9 @@ function FirstSolvedCell({ p, dispatch }: { p: any; dispatch: any }) {
             note: "",
           }));
     dispatch({ type: "DSA_UPDATE", payload: { ...p, firstSolvedAt: value, reviews } });
+    if (isFirstSolve) {
+      dispatch({ type: "UPSERT", payload: { collection: "activities", item: { id: `activity-${p.id}-solved-${value}`, date: value, domain: "DSA", itemId: p.id, label: p.title, result: "PASS", durationMinutes: 0 } } });
+    }
   };
   const openPicker = () => {
     const el = inputRef.current;
@@ -630,7 +621,8 @@ function Dsa() {
                             type="checkbox"
                             checked={r.completed}
                             onClick={(e) => e.stopPropagation()}
-                            onChange={(e) =>
+                            onChange={(e) => {
+                              const today = localDate();
                               dispatch({
                                 type: "DSA_UPDATE",
                                 payload: {
@@ -641,14 +633,17 @@ function Dsa() {
                                           ...x,
                                           completed: e.target.checked,
                                           completedAt: e.target.checked
-                                            ? localDate()
+                                            ? today
                                             : null,
                                         }
                                       : x,
                                   ),
                                 },
-                              })
-                            }
+                              });
+                              if (e.target.checked) {
+                                dispatch({ type: "UPSERT", payload: { collection: "activities", item: { id: `activity-${p.id}-${stage}-${today}`, date: today, domain: "DSA", itemId: p.id, label: `${p.title} (${stage} review)`, result: "PASS", durationMinutes: 0 } } });
+                              }
+                            }}
                           />{" "}
                           {stage}
                         </label>
@@ -680,7 +675,19 @@ function DsaNotesFields({ problemId, stages }: { problemId: string; stages: stri
     if (!user) return;
     let cancelled = false;
     getDsaNotes(user.uid, problemId).then((result) => {
-      if (!cancelled) setNotes(result ?? { initialNotes: "", generalNotes: "", reviewNotes: { D1: "", D4: "", D17: "" }, updatedAt: "" });
+      // Always fill in every field with a default, not just when the whole document is
+      // missing: saveDsaNotes only writes reviewNotes when a review stage was actually
+      // edited, so an existing document can legitimately have initialNotes but no
+      // reviewNotes at all. Reading notes.reviewNotes[stage] below would otherwise throw
+      // once the problem is marked solved (stages becomes non-empty) with a partial doc.
+      if (!cancelled) {
+        setNotes({
+          initialNotes: result?.initialNotes ?? "",
+          generalNotes: result?.generalNotes ?? "",
+          reviewNotes: { D1: result?.reviewNotes?.D1 ?? "", D4: result?.reviewNotes?.D4 ?? "", D17: result?.reviewNotes?.D17 ?? "" },
+          updatedAt: result?.updatedAt ?? "",
+        });
+      }
     });
     return () => { cancelled = true; };
   }, [user, problemId]);
@@ -744,9 +751,8 @@ function DsaDetail() {
   if (!p) return <Navigate to="/dsa" />;
   return (
     <>
-      <PageHeader title={p.title}>
-        <button onClick={() => nav("/dsa")}>← Back</button>
-      </PageHeader>
+      <button className="mb-3" onClick={() => nav("/dsa")}>← Back</button>
+      <PageHeader title={p.title} />
       <a
         href={p.leetcodeUrl || "#"}
         target="_blank"
@@ -784,7 +790,7 @@ function WeeklyPlan() {
   };
   const formatDay = (date: string) => new Date(`${date}T12:00:00`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
   return <>
-    <PageHeader title="Weekly Plan"><button className="icon-button bg-[#21675d] text-white" aria-label="Add study item" title="Add study item" onClick={() => openNew()}><Plus size={18} /></button></PageHeader>
+    <PageHeader title="Weekly Plan" />
     <p className="mb-4 text-slate-600">Plan focused study blocks for the week, then update or remove them as your priorities change.</p>
     <section className="lc-panel mb-4 rounded-xl border bg-white p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -895,7 +901,7 @@ function CalendarPage() {
         </span>
         <span>
           <i className="inline-block size-2 rounded-full bg-orange-500" />{" "}
-          Functional Coding
+          Practical Coding
         </span>
       </p>
       <section className="rounded-xl border bg-white p-4">
@@ -1200,13 +1206,17 @@ interface LeaderboardActivityEntry {
   isYou: boolean;
   label: string;
   occurredAt: string;
+  domain: StoredLeaderboardActivity["domain"];
 }
-const timeAgo = (iso: string) => {
-  const diffDays = Math.floor((Date.now() - new Date(iso).getTime()) / 86400000);
-  if (diffDays <= 0) return "Today";
-  if (diffDays === 1) return "Yesterday";
-  return `${diffDays} days ago`;
-};
+// Europe/London handles the BST/GMT switchover automatically via the IANA tz database, so
+// this never needs manual daylight-saving-time logic.
+const formatUkDateTime = (iso: string) =>
+  new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
+// Fetches a wide-enough window across all domains so that, after splitting client-side per
+// category below, each of DDIA/Hello Interview/DSA reliably has its own 10 most recent —
+// avoids needing a per-domain composite Firestore index just for this feed.
+const RECENT_ACTIVITY_FETCH_LIMIT = 90;
+const RECENT_ACTIVITY_PER_CATEGORY_LIMIT = 10;
 function useLeaderboardActivities(currentUid: string | undefined): { loading: boolean; activities: LeaderboardActivityEntry[] } {
   const [rawActivities, setRawActivities] = useState<StoredLeaderboardActivity[]>([]);
   const [profileNameByUid, setProfileNameByUid] = useState<Record<string, string>>({});
@@ -1215,7 +1225,7 @@ function useLeaderboardActivities(currentUid: string | undefined): { loading: bo
 
   useEffect(() => {
     if (!currentUid) { setActivitiesLoaded(true); return; }
-    return subscribeRecentActivities(20, (all) => {
+    return subscribeRecentActivities(RECENT_ACTIVITY_FETCH_LIMIT, (all) => {
       setRawActivities(all);
       setActivitiesLoaded(true);
     });
@@ -1239,6 +1249,7 @@ function useLeaderboardActivities(currentUid: string | undefined): { loading: bo
       isYou: a.uid === currentUid,
       label: a.label,
       occurredAt: a.occurredAt,
+      domain: a.domain,
     }];
   });
 
@@ -1263,6 +1274,7 @@ function LeaderboardPage() {
   const you = ranked.find((u) => u.isYou);
   const leader = ranked[0];
   const podium = [ranked[1], ranked[0], ranked[2]].filter(Boolean);
+  const activeDomainActivities = activities.filter((a) => a.domain === tab).slice(0, RECENT_ACTIVITY_PER_CATEGORY_LIMIT);
   return (
     <>
       <PageHeader title="Leaderboard" subtitle="Compare progress across the shared curriculum.">
@@ -1344,13 +1356,13 @@ function LeaderboardPage() {
       )}
       <section className="lc-panel rounded-xl border bg-white p-4">
         <h2 className="font-bold">Recent activities</h2>
-        <p className="mb-2 text-sm text-[#657777]">See what everyone has been working on recently.</p>
+        <p className="mb-2 text-sm text-[#657777]">See what everyone has been working on recently in {activeDomain.label}.</p>
         {activitiesLoading ? (
           <p className="text-sm text-[#657777]">Loading recent activity…</p>
-        ) : activities.length === 0 ? (
+        ) : activeDomainActivities.length === 0 ? (
           <p className="text-sm text-[#657777]">No recent activity yet.</p>
         ) : (
-          activities.map((a) => (
+          activeDomainActivities.map((a) => (
             <div className="leaderboard-activity-row" key={`${a.uid}-${a.occurredAt}-${a.label}`}>
               <div className="leaderboard-activity-row__user">
                 <div className="leaderboard-avatar leaderboard-avatar--sm">{a.initial}</div>
@@ -1361,8 +1373,7 @@ function LeaderboardPage() {
                 <strong>completed</strong> {a.label}
               </div>
               <div className="leaderboard-activity-row__meta">
-                {timeAgo(a.occurredAt)}
-                <span className="leaderboard-activity-row__dot" />
+                {formatUkDateTime(a.occurredAt)}
               </div>
             </div>
           ))
@@ -1425,19 +1436,19 @@ function Tasks({ system = false }: { system?: boolean }) {
     if (system) return <SystemDesignDetail key={task.id} task={task} update={update} learningItems={state.learningItems} dispatch={dispatch} onDelete={() => confirm("Delete this task?") && dispatch({ type: "DELETE", payload: { collection, id: task.id } })} onBack={() => nav("/system-design/hello-interview")} />;
     return (
       <>
-        <PageHeader title={task.title}>
-          <button
-            onClick={() =>
-              nav(
-                system
-                  ? "/system-design/hello-interview"
-                  : "/functional-coding",
-              )
-            }
-          >
-            ← Back
-          </button>
-        </PageHeader>
+        <button
+          className="mb-3"
+          onClick={() =>
+            nav(
+              system
+                ? "/system-design/hello-interview"
+                : "/functional-coding",
+            )
+          }
+        >
+          ← Back
+        </button>
+        <PageHeader title={task.title} />
         <section className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,1fr)]">
           <div className="lc-panel rounded-xl border bg-white p-5">
             <p className="mb-4 text-sm text-[#657777]">
@@ -1553,10 +1564,10 @@ function Tasks({ system = false }: { system?: boolean }) {
   }
   return (
     <>
-      <PageHeader title={system ? "System Design" : "Functional Coding"} />
+      <PageHeader title={system ? "System Design" : "Practical Coding"} />
       {domain(
         state,
-        system ? "System Design" : "Functional Coding",
+        system ? "System Design" : "Practical Coding",
         system ? "SYSTEM_DESIGN" : "FUNCTIONAL_CODING",
       )}
       {!system && (
@@ -1639,22 +1650,33 @@ function SystemDesignDetail({ task, update, onDelete, onBack, learningItems, dis
     });
     setQuestionText("");
   };
+  const logInterviewReady = () => {
+    const today = localDate();
+    dispatch({ type: "UPSERT", payload: { collection: "activities", item: { id: `activity-${task.id}-${today}`, date: today, domain: "SYSTEM_DESIGN", itemId: task.id, label: task.title, result: "PASS", durationMinutes: 0 } } });
+  };
   const addAttempt = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const result = String(form.get("result"));
-    update({ attempts: [...attempts, { id: crypto.randomUUID(), date: String(form.get("date")), duration: Number(form.get("duration")), result, notes: String(form.get("notes")) }], status: result === "PASS" ? "INTERVIEW_READY" : "IN_PROGRESS" });
+    const nextStatus = result === "PASS" ? "INTERVIEW_READY" : "IN_PROGRESS";
+    const wasNotReady = task.status !== "INTERVIEW_READY";
+    update({ attempts: [...attempts, { id: crypto.randomUUID(), date: String(form.get("date")), duration: Number(form.get("duration")), result, notes: String(form.get("notes")) }], status: nextStatus });
+    if (nextStatus === "INTERVIEW_READY" && wasNotReady) logInterviewReady();
     setAttemptOpen(false);
   };
   return <>
-    <button className="mb-3" onClick={onBack}>← Back to exercises</button>
+    <button className="mb-3" onClick={onBack}>← Back</button>
     <PageHeader title={task.title} />
     <p className="mb-5 text-sm text-[#657777]">{task.category} · Capture what you learned, questions to revisit, and every practice run.</p>
     <StatusPicker
       title="Have you done this mock interview?"
       value={task.status === "LEARNING" || task.status === "RETRY_DUE" ? "IN_PROGRESS" : task.status || "NOT_STARTED"}
       options={["NOT_STARTED", "IN_PROGRESS", "INTERVIEW_READY"]}
-      onChange={(status) => update({ status })}
+      onChange={(status) => {
+        const wasNotReady = task.status !== "INTERVIEW_READY";
+        update({ status });
+        if (status === "INTERVIEW_READY" && wasNotReady) logInterviewReady();
+      }}
     />
     <section className="lc-panel mb-4 rounded-xl border bg-white p-5">
       <h2 className="font-bold">Questions</h2>
@@ -1686,10 +1708,16 @@ function Motivation() {
     [draft, setDraft] = useState("");
   const sections = [
     "Benefits of changing jobs",
-    "Costs of staying",
     "Costs of changing jobs",
     "Benefits of staying",
+    "Costs of staying",
   ];
+  const sectionPrompts: Record<string, string> = {
+    "Benefits of changing jobs": "What would I gain by changing jobs?",
+    "Costs of changing jobs": "What would changing jobs cost me?",
+    "Benefits of staying": "What do I gain by staying?",
+    "Costs of staying": "What does staying cost me?",
+  };
   const add = () => {
     if (!text.trim()) return;
     dispatch({
@@ -1708,7 +1736,7 @@ function Motivation() {
   };
   return (
     <>
-      <PageHeader title="Motivation" />
+      <PageHeader title="Decision Balance" />
       <p className="mb-4 text-slate-600">
         This is a reminder of why the plan matters, not a way to guilt yourself into working.
       </p>
@@ -1737,7 +1765,7 @@ function Motivation() {
         {sections.map((sectionName) => {
           const entries = state.motivationEntries.filter((entry: any) => entry.section === sectionName).sort((a: any, b: any) => a.order - b.order);
           return <section className="motivation-list rounded-xl border bg-white p-4" key={sectionName}>
-            <h2 className="mb-2 font-bold">{sectionName}</h2>
+            <h2 className="mb-2 font-bold">{sectionPrompts[sectionName]}</h2>
             {entries.length === 0 ? <p className="py-3 text-sm text-[#657777]">No entries yet.</p> : entries.map((x: any) => (
               <div className="flex items-center gap-2 border-b py-3" key={x.id}>
                 {editing === x.id ? <><input className="flex-1 rounded border p-1" value={draft} onChange={(e) => setDraft(e.target.value)} /><button onClick={() => { dispatch({ type: "UPSERT", payload: { collection: "motivationEntries", item: { ...x, text: draft } } }); setEditing(null); }}>Save</button><button onClick={() => setEditing(null)}>Cancel</button></> : <><span className="flex-1">{x.text}</span><button onClick={() => { setEditing(x.id); setDraft(x.text); }}>Edit</button><button onClick={() => confirm("Delete this entry?") && dispatch({ type: "DELETE", payload: { collection: "motivationEntries", id: x.id } })}>Delete</button></>}
@@ -1749,39 +1777,50 @@ function Motivation() {
     </>
   );
 }
+// Keyed by pathname so navigating to a different page remounts a fresh boundary (recovering
+// from a crash without needing a full reload) — the Reload button inside ErrorBoundary is
+// the guaranteed fallback for when the crash is on the current route itself.
+function RoutedContent() {
+  const { pathname } = useLocation();
+  return (
+    <ErrorBoundary key={pathname}>
+      <Routes>
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/motivation" element={<Motivation />} />
+        <Route path="/weekly-plan" element={<WeeklyPlan />} />
+        <Route path="/calendar" element={<CalendarPage />} />
+        <Route path="/behaviour" element={<Questions kind="BEHAVIOUR" />} />
+        <Route path="/java" element={<Questions kind="JAVA_THEORY" />} />
+        <Route path="/dsa" element={<Dsa />} />
+        <Route path="/dsa/:id" element={<DsaDetail />} />
+        <Route path="/functional-coding" element={<Tasks />} />
+        <Route path="/functional-coding/:id" element={<Tasks />} />
+        <Route path="/system-design" element={<SystemDesignPage />} />
+        <Route path="/backup" element={<Backup />} />
+        <Route path="/leaderboard" element={<LeaderboardPage />} />
+        <Route
+          path="/system-design/ddia/:chapterId"
+          element={<Questions kind="DDIA" />}
+        />
+        <Route
+          path="/system-design/hello-interview"
+          element={<HelloInterviewPage />}
+        />
+        <Route
+          path="/system-design/hello-interview/:id"
+          element={<Tasks system />}
+        />
+      </Routes>
+    </ErrorBoundary>
+  );
+}
 export default function App() {
   return (
     <LeaderboardSyncProvider>
     <HashRouter>
       <Shell>
-        <Routes>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/motivation" element={<Motivation />} />
-          <Route path="/weekly-plan" element={<WeeklyPlan />} />
-          <Route path="/calendar" element={<CalendarPage />} />
-          <Route path="/behaviour" element={<Questions kind="BEHAVIOUR" />} />
-          <Route path="/java" element={<Questions kind="JAVA_THEORY" />} />
-          <Route path="/dsa" element={<Dsa />} />
-          <Route path="/dsa/:id" element={<DsaDetail />} />
-          <Route path="/functional-coding" element={<Tasks />} />
-          <Route path="/functional-coding/:id" element={<Tasks />} />
-          <Route path="/system-design" element={<SystemDesignPage />} />
-          <Route path="/backup" element={<Backup />} />
-          <Route path="/leaderboard" element={<LeaderboardPage />} />
-          <Route
-            path="/system-design/ddia/:chapterId"
-            element={<Questions kind="DDIA" />}
-          />
-          <Route
-            path="/system-design/hello-interview"
-            element={<HelloInterviewPage />}
-          />
-          <Route
-            path="/system-design/hello-interview/:id"
-            element={<Tasks system />}
-          />
-        </Routes>
+        <RoutedContent />
       </Shell>
     </HashRouter>
     </LeaderboardSyncProvider>
