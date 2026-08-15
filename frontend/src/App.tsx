@@ -5,11 +5,12 @@ import {
   Navigate,
   Route,
   Routes,
+  useLocation,
   useNavigate,
   useParams,
 } from "react-router";
 import { Calendar, Home, BookOpen, Code2, Network, Brain, Pencil, ArrowUp, ArrowDown, AlarmClock, CalendarDays, CheckCircle2, ClipboardList, Flame, GripVertical, Plus, Sparkles, Target, TrendingUp, Trash2, Save, Trophy, Crown } from "lucide-react";
-import { useRef, useState, type ElementType, type FormEvent } from "react";
+import { useEffect, useRef, useState, type ElementType, type FormEvent } from "react";
 import {
   DomainProgress,
   PageHeader,
@@ -20,7 +21,16 @@ import {
 } from "./components/common";
 import { Backup } from "./components/Backup";
 import { useAppState } from "./app/AppStateProvider";
-import { sampleData } from "./data/sampleData";
+import { useAuth } from "./app/AuthProvider";
+import { useProfile } from "./app/ProfileGate";
+import { useAutosaveField } from "./app/useAutosaveField";
+import { getDsaNotes, saveDsaNotes, type DsaNotes } from "./services/firebase/dsaNotesRepository";
+import { getDailyLog, saveDailyLog } from "./services/firebase/userEntityRepository";
+import { LeaderboardSyncProvider } from "./app/LeaderboardSyncProvider";
+import { subscribeAllProgress, type StoredLeaderboardProgress } from "./services/firebase/leaderboardProgressRepository";
+import { subscribeAllProfiles } from "./services/firebase/profile";
+import { subscribeRecentActivities, type StoredLeaderboardActivity } from "./services/firebase/leaderboardActivityRepository";
+import { ErrorBoundary } from "./app/ErrorBoundary";
 import {
   dueState,
   progress,
@@ -31,18 +41,18 @@ import {
 } from "./services/readiness/calculations";
 const nav = [
   ["/dashboard", "Dashboard", Home],
-  ["/motivation", "Motivation", Brain],
+  ["/motivation", "Decision Balance", Brain],
   ["/weekly-plan", "Weekly Plan", CalendarDays],
   ["/calendar", "Calendar", Calendar],
   ["/behaviour", "Behaviour", BookOpen],
   ["/java", "Java Theory", BookOpen],
   ["/dsa", "DSA", Code2],
-  ["/functional-coding", "Functional Coding", Code2],
+  ["/functional-coding", "Practical Coding", Code2],
   ["/system-design", "System Design", Network],
   ["/backup", "Backup", Save],
   ["/leaderboard", "Leaderboard", Trophy],
 ] as const;
-const DOMAIN_LABELS: Record<string, string> = { DSA: "DSA", JAVA_THEORY: "Java Theory", BEHAVIOUR: "Behaviour", FUNCTIONAL_CODING: "Functional Coding", SYSTEM_DESIGN: "System Design", DDIA: "DDIA" };
+const DOMAIN_LABELS: Record<string, string> = { DSA: "DSA", JAVA_THEORY: "Java Theory", BEHAVIOUR: "Behaviour", FUNCTIONAL_CODING: "Practical Coding", SYSTEM_DESIGN: "System Design", DDIA: "DDIA" };
 const DDIA_CHAPTERS = [
   "Reliable, scalable, maintainable applications",
   "Data models and query languages",
@@ -57,27 +67,13 @@ const DDIA_CHAPTERS = [
   "Stream processing",
   "The future of data systems",
 ];
-// Dummy data for the Leaderboard preview — replace with real synced data once the shared backend lands.
 const LEADERBOARD_DOMAINS = [
   { key: "DDIA", label: "DDIA", icon: BookOpen, unit: "chapters" },
   { key: "HELLO_INTERVIEW", label: "Hello Interview", icon: Network, unit: "exercises" },
   { key: "DSA", label: "DSA", icon: Code2, unit: "problems" },
 ] as const;
-const LEADERBOARD_USERS = [
-  { id: "alex", name: "Alex", initial: "A", isYou: false, progress: { DDIA: { done: 8, total: 12 }, HELLO_INTERVIEW: { done: 9, total: 15 }, DSA: { done: 52, total: 150 } } },
-  { id: "maki", name: "Maki", initial: "M", isYou: true, progress: { DDIA: { done: 7, total: 12 }, HELLO_INTERVIEW: { done: 6, total: 15 }, DSA: { done: 44, total: 150 } } },
-  { id: "sam", name: "Sam", initial: "S", isYou: false, progress: { DDIA: { done: 5, total: 12 }, HELLO_INTERVIEW: { done: 4, total: 15 }, DSA: { done: 30, total: 150 } } },
-];
-const LEADERBOARD_ACTIVITIES = [
-  { name: "Alex", initial: "A", isYou: false, verb: "completed", target: "Chapter 8", context: "Distributed Systems", time: "Today" },
-  { name: "Maki", initial: "M", isYou: true, verb: "reviewed", target: "Chapter 7", context: "Transactions", time: "Today" },
-  { name: "Sam", initial: "S", isYou: false, verb: "completed", target: "quiz", context: "Chapter 4 Quiz", time: "2 days ago" },
-  { name: "Alex", initial: "A", isYou: false, verb: "answered", target: "6 questions", context: "Chapter 7 Quiz", time: "Yesterday" },
-  { name: "Maki", initial: "M", isYou: true, verb: "completed", target: "quiz", context: "Chapter 6 Quiz", time: "Yesterday" },
-  { name: "Sam", initial: "S", isYou: false, verb: "completed", target: "Chapter 5", context: "Replication", time: "Yesterday" },
-];
 function Shell({ children }: { children: React.ReactNode }) {
-  const { dispatch } = useAppState();
+  const { user, signOut } = useAuth();
   return (
     <div className="min-h-screen bg-[#f6f8f7] text-[#203334]">
       <aside className="fixed hidden h-screen w-60 bg-[#183d3a] p-4 text-[#e8f2ef] md:block">
@@ -97,15 +93,14 @@ function Shell({ children }: { children: React.ReactNode }) {
             {label}
           </NavLink>
         ))}
-        <button
-          className="mt-auto w-full rounded border border-[#6f9790] px-3 py-2 text-sm text-[#dce9e6] hover:bg-[#24514c]"
-          onClick={() =>
-            confirm("Reset all data to the sample data?") &&
-            dispatch({ type: "REPLACE", payload: sampleData() })
-          }
-        >
-          Reset sample data
-        </button>
+        {user && (
+          <div className="mt-4 mb-2 rounded border border-[#6f9790] px-3 py-2 text-xs text-[#dce9e6]">
+            <p className="truncate">Signed in as {user.displayName || user.email}</p>
+            <button className="mt-1 underline hover:text-white" onClick={() => void signOut()}>
+              Sign out
+            </button>
+          </div>
+        )}
       </aside>
       <main className="mx-auto max-w-[1500px] p-4 md:ml-60 md:p-8">{children}</main>
     </div>
@@ -316,7 +311,7 @@ function Dashboard() {
             ["Behaviour", "BEHAVIOUR"],
             ["Java Theory", "JAVA_THEORY"],
             ["DSA", "DSA"],
-            ["Functional Coding", "FUNCTIONAL_CODING"],
+            ["Practical Coding", "FUNCTIONAL_CODING"],
             ["DDIA", "DDIA"],
             ["Hello Interview", "SYSTEM_DESIGN"],
           ].map(([label, x]) => {
@@ -414,7 +409,12 @@ function Questions({ kind }: { kind: "BEHAVIOUR" | "JAVA_THEORY" | "DDIA" }) {
   const chapterRecord = chapterKey ? state.ddiaChapters.find((c: any) => c.id === chapterKey) : null;
   const saveChapter = (patch: any) => {
     if (!chapterKey) return;
-    dispatch({ type: "UPSERT", payload: { collection: "ddiaChapters", item: { id: chapterKey, status: "NOT_STARTED", notes: "", ...chapterRecord, ...patch } } });
+    const wasNotDone = chapterRecord?.status !== "DONE";
+    dispatch({ type: "UPSERT", payload: { collection: "ddiaChapters", item: { id: chapterKey, ...patch } } });
+    if (patch.status === "DONE" && wasNotDone) {
+      const today = localDate();
+      dispatch({ type: "UPSERT", payload: { collection: "activities", item: { id: `activity-ddia-${chapterKey}-${today}`, date: today, domain: "DDIA", itemId: chapterKey, label: `DDIA Chapter ${chapterKey.replace("CHAPTER_", "")}`, result: "PASS", durationMinutes: 0 } } });
+    }
   };
   return (
     <>
@@ -492,21 +492,33 @@ function Questions({ kind }: { kind: "BEHAVIOUR" | "JAVA_THEORY" | "DDIA" }) {
         <section className="lc-panel mt-4 rounded-xl border bg-white p-4">
           <h2 className="font-bold">Learning notes</h2>
           <p className="mb-2 text-sm text-[#657777]">Key takeaways and things to revisit from this chapter.</p>
-          <textarea
-            className="min-h-40 w-full rounded border p-2"
-            defaultValue={chapterRecord?.notes || ""}
-            placeholder="What stood out in this chapter?"
-            onBlur={(e) => saveChapter({ notes: e.target.value })}
-          />
+          <DdiaChapterNotesField key={chapterKey} initialValue={chapterRecord?.notes || ""} onSave={(value) => saveChapter({ notes: value })} />
         </section>
       )}
     </>
+  );
+}
+// Keyed by chapterKey at the call site so switching DDIA chapters (a route param change
+// that does not remount Questions) gets a fresh useAutosaveField instance instead of
+// reusing the previous chapter's stale value/timer — see DsaNotesFieldsLoaded for the same
+// "hook state must be re-mounted, not just re-rendered" principle.
+function DdiaChapterNotesField({ initialValue, onSave }: { initialValue: string; onSave: (value: string) => void }) {
+  const chapterNotes = useAutosaveField(initialValue, onSave);
+  return (
+    <textarea
+      className="min-h-40 w-full rounded border p-2"
+      value={chapterNotes.value}
+      placeholder="What stood out in this chapter?"
+      onChange={(e) => chapterNotes.onChange(e.target.value)}
+      onBlur={chapterNotes.onBlur}
+    />
   );
 }
 function FirstSolvedCell({ p, dispatch }: { p: any; dispatch: any }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const markSolved = (value: string) => {
     if (!value) return;
+    const isFirstSolve = !p.firstSolvedAt;
     const reviews =
       p.reviews && p.reviews.length > 0
         ? p.reviews
@@ -519,6 +531,9 @@ function FirstSolvedCell({ p, dispatch }: { p: any; dispatch: any }) {
             note: "",
           }));
     dispatch({ type: "DSA_UPDATE", payload: { ...p, firstSolvedAt: value, reviews } });
+    if (isFirstSolve) {
+      dispatch({ type: "UPSERT", payload: { collection: "activities", item: { id: `activity-${p.id}-solved-${value}`, date: value, domain: "DSA", itemId: p.id, label: p.title, result: "PASS", durationMinutes: 0 } } });
+    }
   };
   const openPicker = () => {
     const el = inputRef.current;
@@ -606,7 +621,8 @@ function Dsa() {
                             type="checkbox"
                             checked={r.completed}
                             onClick={(e) => e.stopPropagation()}
-                            onChange={(e) =>
+                            onChange={(e) => {
+                              const today = localDate();
                               dispatch({
                                 type: "DSA_UPDATE",
                                 payload: {
@@ -617,14 +633,17 @@ function Dsa() {
                                           ...x,
                                           completed: e.target.checked,
                                           completedAt: e.target.checked
-                                            ? localDate()
+                                            ? today
                                             : null,
                                         }
                                       : x,
                                   ),
                                 },
-                              })
-                            }
+                              });
+                              if (e.target.checked) {
+                                dispatch({ type: "UPSERT", payload: { collection: "activities", item: { id: `activity-${p.id}-${stage}-${today}`, date: today, domain: "DSA", itemId: p.id, label: `${p.title} (${stage} review)`, result: "PASS", durationMinutes: 0 } } });
+                              }
+                            }}
                           />{" "}
                           {stage}
                         </label>
@@ -649,19 +668,91 @@ function Dsa() {
     </>
   );
 }
+function DsaNotesFields({ problemId, stages }: { problemId: string; stages: string[] }) {
+  const { user } = useAuth();
+  const [notes, setNotes] = useState<DsaNotes | null>(null);
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    getDsaNotes(user.uid, problemId).then((result) => {
+      // Always fill in every field with a default, not just when the whole document is
+      // missing: saveDsaNotes only writes reviewNotes when a review stage was actually
+      // edited, so an existing document can legitimately have initialNotes but no
+      // reviewNotes at all. Reading notes.reviewNotes[stage] below would otherwise throw
+      // once the problem is marked solved (stages becomes non-empty) with a partial doc.
+      if (!cancelled) {
+        setNotes({
+          initialNotes: result?.initialNotes ?? "",
+          generalNotes: result?.generalNotes ?? "",
+          reviewNotes: { D1: result?.reviewNotes?.D1 ?? "", D4: result?.reviewNotes?.D4 ?? "", D17: result?.reviewNotes?.D17 ?? "" },
+          updatedAt: result?.updatedAt ?? "",
+        });
+      }
+    });
+    return () => { cancelled = true; };
+  }, [user, problemId]);
+
+  const save = (patch: Parameters<typeof saveDsaNotes>[2]) => { if (user) void saveDsaNotes(user.uid, problemId, patch); };
+
+  if (!notes) return <p className="mt-4 text-sm text-[#657777]">Loading notes…</p>;
+
+  return (
+    <DsaNotesFieldsLoaded notes={notes} stages={stages} save={save} />
+  );
+}
+// Only mounted once `notes` has actually loaded from Firestore — useAutosaveField's
+// internal useState(initialValue) only honors the value on this component's first render,
+// so mounting it earlier (while notes is still null) would permanently lock the fields to
+// an empty string even after the real value arrives.
+function DsaNotesFieldsLoaded({ notes, stages, save }: { notes: DsaNotes; stages: string[]; save: (patch: Parameters<typeof saveDsaNotes>[2]) => void }) {
+  const initialNotesField = useAutosaveField(notes.initialNotes, (value) => save({ initialNotes: value }));
+  const generalNotesField = useAutosaveField(notes.generalNotes, (value) => save({ generalNotes: value }));
+
+  return (
+    <>
+      <label>
+        Initial solve notes
+        <textarea
+          value={initialNotesField.value}
+          onChange={(e) => initialNotesField.onChange(e.target.value)}
+          onBlur={initialNotesField.onBlur}
+          className="mt-1 w-full rounded border p-2"
+        />
+      </label>
+      {stages.map((stage) => (
+        <DsaReviewNoteField key={stage} stage={stage} initialValue={notes.reviewNotes[stage as keyof DsaNotes["reviewNotes"]] ?? ""} onSave={(value) => save({ reviewNotes: { [stage]: value } })} />
+      ))}
+      <label className="mt-3 block">
+        General notes
+        <textarea
+          value={generalNotesField.value}
+          onChange={(e) => generalNotesField.onChange(e.target.value)}
+          onBlur={generalNotesField.onBlur}
+          className="mt-1 w-full rounded border p-2"
+        />
+      </label>
+    </>
+  );
+}
+function DsaReviewNoteField({ stage, initialValue, onSave }: { stage: string; initialValue: string; onSave: (value: string) => void }) {
+  const field = useAutosaveField(initialValue, onSave);
+  return (
+    <label className="mt-3 block">
+      {stage} review note
+      <textarea value={field.value} onChange={(e) => field.onChange(e.target.value)} onBlur={field.onBlur} className="mt-1 w-full rounded border p-2" />
+    </label>
+  );
+}
 function DsaDetail() {
   const { id = "" } = useParams(),
-    { state, dispatch } = useAppState(),
+    { state } = useAppState(),
     nav = useNavigate();
   const p = state.dsa.find((x: any) => x.id === id);
   if (!p) return <Navigate to="/dsa" />;
-  const save = (field: string, value: string) =>
-    dispatch({ type: "DSA_UPDATE", payload: { ...p, [field]: value } });
   return (
     <>
-      <PageHeader title={p.title}>
-        <button onClick={() => nav("/dsa")}>← Back</button>
-      </PageHeader>
+      <button className="mb-3" onClick={() => nav("/dsa")}>← Back</button>
+      <PageHeader title={p.title} />
       <a
         href={p.leetcodeUrl || "#"}
         target="_blank"
@@ -671,42 +762,7 @@ function DsaDetail() {
         Open in LeetCode ↗
       </a>
       <section className="mt-4 rounded-xl border bg-white p-4">
-        <label>
-          Initial solve notes
-          <textarea
-            defaultValue={p.initialNotes}
-            onBlur={(e) => save("initialNotes", e.target.value)}
-            className="mt-1 w-full rounded border p-2"
-          />
-        </label>
-        {p.reviews.map((r: any) => (
-          <label className="mt-3 block" key={r.stage}>
-            {r.stage} review note
-            <textarea
-              defaultValue={r.note}
-              onBlur={(e) =>
-                dispatch({
-                  type: "DSA_UPDATE",
-                  payload: {
-                    ...p,
-                    reviews: p.reviews.map((x: any) =>
-                      x.stage === r.stage ? { ...x, note: e.target.value } : x,
-                    ),
-                  },
-                })
-              }
-              className="mt-1 w-full rounded border p-2"
-            />
-          </label>
-        ))}
-        <label className="mt-3 block">
-          General notes
-          <textarea
-            defaultValue={p.generalNotes}
-            onBlur={(e) => save("generalNotes", e.target.value)}
-            className="mt-1 w-full rounded border p-2"
-          />
-        </label>
+        <DsaNotesFields key={id} problemId={id} stages={p.reviews.map((r: any) => r.stage)} />
       </section>
     </>
   );
@@ -734,7 +790,7 @@ function WeeklyPlan() {
   };
   const formatDay = (date: string) => new Date(`${date}T12:00:00`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
   return <>
-    <PageHeader title="Weekly Plan"><button className="icon-button bg-[#21675d] text-white" aria-label="Add study item" title="Add study item" onClick={() => openNew()}><Plus size={18} /></button></PageHeader>
+    <PageHeader title="Weekly Plan" />
     <p className="mb-4 text-slate-600">Plan focused study blocks for the week, then update or remove them as your priorities change.</p>
     <section className="lc-panel mb-4 rounded-xl border bg-white p-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -785,12 +841,36 @@ function WeeklyPlan() {
     </section>
   </>;
 }
+function DailyNoteField({ day }: { day: string }) {
+  const { user } = useAuth();
+  const [note, setNote] = useState<string | null>(null);
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    getDailyLog(user.uid, day).then((result) => { if (!cancelled) setNote(result?.note ?? ""); });
+    return () => { cancelled = true; };
+  }, [user, day]);
+  if (note === null) return <p className="mt-2 text-sm text-[#657777]">Loading…</p>;
+  return <DailyNoteFieldLoaded note={note} onSave={(value) => { if (user) void saveDailyLog(user.uid, day, value); }} />;
+}
+// Only mounted once `note` has actually loaded — see DsaNotesFieldsLoaded for why.
+function DailyNoteFieldLoaded({ note, onSave }: { note: string; onSave: (value: string) => void }) {
+  const field = useAutosaveField(note, onSave);
+  return (
+    <textarea
+      value={field.value}
+      onChange={(e) => field.onChange(e.target.value)}
+      onBlur={field.onBlur}
+      placeholder="What felt clear? What needs repair?"
+      className="mt-2 min-h-36 w-full rounded border p-2"
+    />
+  );
+}
 function CalendarPage() {
-  const { state, dispatch } = useAppState(),
+  const { state } = useAppState(),
     [day, setDay] = useState(localDate()),
     [month, setMonth] = useState(() => new Date());
-  const log = state.dailyLogs.find((x: any) => x.date === day),
-    first = new Date(month.getFullYear(), month.getMonth(), 1),
+  const first = new Date(month.getFullYear(), month.getMonth(), 1),
     start = new Date(first);
   start.setDate(1 - first.getDay());
   const colours: any = {
@@ -821,7 +901,7 @@ function CalendarPage() {
         </span>
         <span>
           <i className="inline-block size-2 rounded-full bg-orange-500" />{" "}
-          Functional Coding
+          Practical Coding
         </span>
       </p>
       <section className="rounded-xl border bg-white p-4">
@@ -928,24 +1008,10 @@ function CalendarPage() {
         <div className="lc-panel rounded-xl border bg-white p-4">
           <label className="block font-semibold">
             Daily note
-            <textarea
-              defaultValue={log?.note || ""}
-              placeholder="What felt clear? What needs repair?"
-              onBlur={(e) =>
-                dispatch({
-                  type: "DAILY_LOG_SAVE",
-                  payload: {
-                    id: `daily-log-${day}`,
-                    date: day,
-                    note: e.target.value,
-                  },
-                })
-              }
-              className="mt-2 min-h-36 w-full rounded border p-2"
-            />
+            <DailyNoteField key={day} day={day} />
           </label>
           <p className="mt-2 text-sm text-[#657777]">
-            Saved automatically when you leave the field.
+            Saved automatically a few seconds after you stop typing, or when you leave the field.
           </p>
         </div>
       </section>
@@ -1050,10 +1116,156 @@ function HelloInterviewPage() {
     </>
   );
 }
+function EditDisplayNameForm({ displayName: currentName, onDone }: { displayName: string; onDone: () => void }) {
+  const { renameProfile } = useProfile();
+  const [name, setName] = useState(currentName);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const handleSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await renameProfile(trimmed);
+      onDone();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save your name.");
+    } finally {
+      setSaving(false);
+    }
+  };
+  return (
+    <form className="flex flex-wrap items-center gap-2" onSubmit={(event) => void handleSubmit(event)}>
+      <input className="rounded border p-1 text-sm" value={name} onChange={(event) => setName(event.target.value)} required />
+      <button type="submit" className="text-sm text-[#21675d] underline" disabled={saving || !name.trim()}>
+        {saving ? "Saving…" : "Save"}
+      </button>
+      <button type="button" className="text-sm text-[#657777] underline" onClick={onDone}>
+        Cancel
+      </button>
+      {error && <span className="text-sm text-[#923d36]">{error}</span>}
+    </form>
+  );
+}
+interface LeaderboardEntry {
+  uid: string;
+  name: string;
+  initial: string;
+  isYou: boolean;
+  progress: Record<(typeof LEADERBOARD_DOMAINS)[number]["key"], { done: number; total: number }>;
+}
+function useLeaderboardEntries(currentUid: string | undefined): { loading: boolean; entries: LeaderboardEntry[] } {
+  const [progressByUid, setProgressByUid] = useState<Record<string, StoredLeaderboardProgress>>({});
+  const [profileNameByUid, setProfileNameByUid] = useState<Record<string, string>>({});
+  const [progressLoaded, setProgressLoaded] = useState(false);
+  const [profilesLoaded, setProfilesLoaded] = useState(false);
+
+  useEffect(() => {
+    // Firestore denies these reads while signed out — don't even try, to avoid noisy
+    // permission-denied console errors on a page LeaderboardPage renders a sign-in
+    // prompt for anyway.
+    if (!currentUid) { setProgressLoaded(true); return; }
+    return subscribeAllProgress((all) => {
+      setProgressByUid(Object.fromEntries(all.map((p) => [p.uid, p])));
+      setProgressLoaded(true);
+    });
+  }, [currentUid]);
+
+  useEffect(() => {
+    if (!currentUid) { setProfilesLoaded(true); return; }
+    return subscribeAllProfiles((all) => {
+      setProfileNameByUid(Object.fromEntries(all.map((p) => [p.uid, p.displayName])));
+      setProfilesLoaded(true);
+    });
+  }, [currentUid]);
+
+  const entries: LeaderboardEntry[] = Object.values(progressByUid).flatMap((p) => {
+    const name = profileNameByUid[p.uid];
+    if (!name) return [];
+    return [{
+      uid: p.uid,
+      name,
+      initial: name.trim().charAt(0).toUpperCase() || "?",
+      isYou: p.uid === currentUid,
+      progress: {
+        DDIA: { done: p.ddia.completed, total: p.ddia.total },
+        HELLO_INTERVIEW: { done: p.helloInterview.completed, total: p.helloInterview.total },
+        DSA: { done: p.dsa.completed, total: p.dsa.total },
+      },
+    }];
+  });
+
+  return { loading: !progressLoaded || !profilesLoaded, entries };
+}
+interface LeaderboardActivityEntry {
+  uid: string;
+  name: string;
+  initial: string;
+  isYou: boolean;
+  label: string;
+  occurredAt: string;
+  domain: StoredLeaderboardActivity["domain"];
+}
+// Europe/London handles the BST/GMT switchover automatically via the IANA tz database, so
+// this never needs manual daylight-saving-time logic.
+const formatUkDateTime = (iso: string) =>
+  new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(iso));
+// Fetches a wide-enough window across all domains so that, after splitting client-side per
+// category below, each of DDIA/Hello Interview/DSA reliably has its own 10 most recent —
+// avoids needing a per-domain composite Firestore index just for this feed.
+const RECENT_ACTIVITY_FETCH_LIMIT = 90;
+const RECENT_ACTIVITY_PER_CATEGORY_LIMIT = 10;
+function useLeaderboardActivities(currentUid: string | undefined): { loading: boolean; activities: LeaderboardActivityEntry[] } {
+  const [rawActivities, setRawActivities] = useState<StoredLeaderboardActivity[]>([]);
+  const [profileNameByUid, setProfileNameByUid] = useState<Record<string, string>>({});
+  const [activitiesLoaded, setActivitiesLoaded] = useState(false);
+  const [profilesLoaded, setProfilesLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!currentUid) { setActivitiesLoaded(true); return; }
+    return subscribeRecentActivities(RECENT_ACTIVITY_FETCH_LIMIT, (all) => {
+      setRawActivities(all);
+      setActivitiesLoaded(true);
+    });
+  }, [currentUid]);
+
+  useEffect(() => {
+    if (!currentUid) { setProfilesLoaded(true); return; }
+    return subscribeAllProfiles((all) => {
+      setProfileNameByUid(Object.fromEntries(all.map((p) => [p.uid, p.displayName])));
+      setProfilesLoaded(true);
+    });
+  }, [currentUid]);
+
+  const activities: LeaderboardActivityEntry[] = rawActivities.flatMap((a) => {
+    const name = profileNameByUid[a.uid];
+    if (!name) return [];
+    return [{
+      uid: a.uid,
+      name,
+      initial: name.trim().charAt(0).toUpperCase() || "?",
+      isYou: a.uid === currentUid,
+      label: a.label,
+      occurredAt: a.occurredAt,
+      domain: a.domain,
+    }];
+  });
+
+  return { loading: !activitiesLoaded || !profilesLoaded, activities };
+}
 function LeaderboardPage() {
+  // Reached only once AppAuthGate/ProfileGate confirm a signed-in user with a profile.
+  const { user } = useAuth();
+  const { profile } = useProfile();
   const [tab, setTab] = useState<(typeof LEADERBOARD_DOMAINS)[number]["key"]>("DDIA");
+  const [editingName, setEditingName] = useState(false);
+  const { loading: entriesLoading, entries } = useLeaderboardEntries(user?.uid);
+  const { loading: activitiesLoading, activities } = useLeaderboardActivities(user?.uid);
+  if (!user || !profile) return null;
   const activeDomain = LEADERBOARD_DOMAINS.find((d) => d.key === tab)!;
-  const ranked = LEADERBOARD_USERS
+  const ranked = entries
     .map((u) => {
       const p = u.progress[tab];
       return { ...u, done: p.done, total: p.total, percentage: p.total ? Math.round((p.done / p.total) * 100) : 0 };
@@ -1062,9 +1274,21 @@ function LeaderboardPage() {
   const you = ranked.find((u) => u.isYou);
   const leader = ranked[0];
   const podium = [ranked[1], ranked[0], ranked[2]].filter(Boolean);
+  const activeDomainActivities = activities.filter((a) => a.domain === tab).slice(0, RECENT_ACTIVITY_PER_CATEGORY_LIMIT);
   return (
     <>
-      <PageHeader title="Leaderboard" subtitle="Compare progress across the shared curriculum." />
+      <PageHeader title="Leaderboard" subtitle="Compare progress across the shared curriculum.">
+        {editingName ? (
+          <EditDisplayNameForm displayName={profile.displayName} onDone={() => setEditingName(false)} />
+        ) : (
+          <span className="text-sm text-[#657777]">
+            Showing as <strong>{profile.displayName}</strong>{" "}
+            <button type="button" className="text-[#21675d] underline" onClick={() => setEditingName(true)}>
+              Edit name
+            </button>
+          </span>
+        )}
+      </PageHeader>
       <div className="leaderboard-tabs mb-5">
         {LEADERBOARD_DOMAINS.map((d) => (
           <button type="button" key={d.key} className={`leaderboard-tab ${tab === d.key ? "leaderboard-tab--active" : ""}`} onClick={() => setTab(d.key)}>
@@ -1072,73 +1296,103 @@ function LeaderboardPage() {
           </button>
         ))}
       </div>
-      <div className="leaderboard-podium mb-5">
-        {podium.map((u) => {
-          const rank = ranked.indexOf(u) + 1;
-          const isLeader = rank === 1;
-          return (
-            <div key={u.id} className={`leaderboard-podium-card ${isLeader ? "leaderboard-podium-card--leader" : ""}`}>
-              <span className={`leaderboard-rank-badge leaderboard-rank-badge--${rank}`}>{rank}</span>
-              <div className="leaderboard-avatar">{u.initial}</div>
-              <div className="leaderboard-podium-card__name">
-                {u.name}
-                {u.isYou && <span className="leaderboard-you-tag">You</span>}
-              </div>
-              <div className="leaderboard-podium-card__pct">{u.percentage}%</div>
-              <div className="leaderboard-podium-card__sub">{u.done} / {u.total} {activeDomain.unit}</div>
-              <div className="leaderboard-podium-card__footer">
-                {isLeader ? (
-                  <span className="leaderboard-podium-card__footer--leading"><Crown size={14} /> Leading</span>
-                ) : u.isYou ? (
-                  `${leader.percentage - u.percentage}% behind 1st`
-                ) : (
-                  `${Math.abs((you?.percentage ?? 0) - u.percentage)}% ${u.percentage <= (you?.percentage ?? 0) ? "behind" : "ahead of"} you`
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
-      <section className="lc-panel mb-5 rounded-xl border bg-white p-4">
-        <h2 className="font-bold">Full ranking</h2>
-        <p className="mb-2 text-sm text-[#657777]">Only built-in curriculum items count toward progress.</p>
-        {ranked.map((u, index) => (
-          <div className="leaderboard-ranking-row" key={u.id}>
-            <span className={`leaderboard-ranking-badge leaderboard-rank-badge--${index + 1}`}>{index + 1}</span>
-            <div className="leaderboard-ranking-name">
-              <div className="leaderboard-avatar leaderboard-avatar--sm">{u.initial}</div>
-              {u.name}
-              {u.isYou && <span className="leaderboard-you-tag">You</span>}
-            </div>
-            <div className="leaderboard-ranking-bar-wrap">
-              <div className="leaderboard-ranking-bar"><div style={{ width: `${u.percentage}%` }} /></div>
-            </div>
-            <div className="leaderboard-ranking-pct">{u.percentage}%</div>
-            <div className="leaderboard-ranking-sub">{u.done} / {u.total} {activeDomain.unit}</div>
+      {entriesLoading ? (
+        <section className="lc-panel mb-5 rounded-xl border bg-white p-8 text-center text-[#657777]">
+          Loading leaderboard…
+        </section>
+      ) : ranked.length === 0 ? (
+        <section className="lc-panel mb-5 rounded-xl border bg-white p-8 text-center text-[#657777]">
+          No one has synced progress yet. Complete some tasks to appear here!
+        </section>
+      ) : (
+        <>
+          <div className="leaderboard-podium mb-5">
+            {podium.map((u) => {
+              const rank = ranked.indexOf(u) + 1;
+              const isLeader = rank === 1;
+              return (
+                <div key={u.uid} className={`leaderboard-podium-card ${isLeader ? "leaderboard-podium-card--leader" : ""}`}>
+                  <span className={`leaderboard-rank-badge leaderboard-rank-badge--${rank}`}>{rank}</span>
+                  <div className="leaderboard-avatar">{u.initial}</div>
+                  <div className="leaderboard-podium-card__name">
+                    {u.name}
+                    {u.isYou && <span className="leaderboard-you-tag">You</span>}
+                  </div>
+                  <div className="leaderboard-podium-card__pct">{u.percentage}%</div>
+                  <div className="leaderboard-podium-card__sub">{u.done} / {u.total} {activeDomain.unit}</div>
+                  <div className="leaderboard-podium-card__footer">
+                    {isLeader ? (
+                      <span className="leaderboard-podium-card__footer--leading"><Crown size={14} /> Leading</span>
+                    ) : u.isYou ? (
+                      `${leader.percentage - u.percentage}% behind 1st`
+                    ) : (
+                      `${Math.abs((you?.percentage ?? 0) - u.percentage)}% ${u.percentage <= (you?.percentage ?? 0) ? "behind" : "ahead of"} you`
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
-        ))}
-      </section>
+          <section className="lc-panel mb-5 rounded-xl border bg-white p-4">
+            <h2 className="font-bold">Full ranking</h2>
+            <p className="mb-2 text-sm text-[#657777]">Only built-in curriculum items count toward progress.</p>
+            {ranked.map((u, index) => (
+              <div className="leaderboard-ranking-row" key={u.uid}>
+                <span className={`leaderboard-ranking-badge leaderboard-rank-badge--${index + 1}`}>{index + 1}</span>
+                <div className="leaderboard-ranking-name">
+                  <div className="leaderboard-avatar leaderboard-avatar--sm">{u.initial}</div>
+                  {u.name}
+                  {u.isYou && <span className="leaderboard-you-tag">You</span>}
+                </div>
+                <div className="leaderboard-ranking-bar-wrap">
+                  <div className="leaderboard-ranking-bar"><div style={{ width: `${u.percentage}%` }} /></div>
+                </div>
+                <div className="leaderboard-ranking-pct">{u.percentage}%</div>
+                <div className="leaderboard-ranking-sub">{u.done} / {u.total} {activeDomain.unit}</div>
+              </div>
+            ))}
+          </section>
+        </>
+      )}
       <section className="lc-panel rounded-xl border bg-white p-4">
         <h2 className="font-bold">Recent activities</h2>
-        <p className="mb-2 text-sm text-[#657777]">See what everyone has been working on recently.</p>
-        {LEADERBOARD_ACTIVITIES.map((a, index) => (
-          <div className="leaderboard-activity-row" key={index}>
-            <div className="leaderboard-activity-row__user">
-              <div className="leaderboard-avatar leaderboard-avatar--sm">{a.initial}</div>
-              <span>{a.name}</span>
-              {a.isYou && <span className="leaderboard-you-tag">You</span>}
+        <p className="mb-2 text-sm text-[#657777]">See what everyone has been working on recently in {activeDomain.label}.</p>
+        {activitiesLoading ? (
+          <p className="text-sm text-[#657777]">Loading recent activity…</p>
+        ) : activeDomainActivities.length === 0 ? (
+          <p className="text-sm text-[#657777]">No recent activity yet.</p>
+        ) : (
+          activeDomainActivities.map((a) => (
+            <div className="leaderboard-activity-row" key={`${a.uid}-${a.occurredAt}-${a.label}`}>
+              <div className="leaderboard-activity-row__user">
+                <div className="leaderboard-avatar leaderboard-avatar--sm">{a.initial}</div>
+                <span>{a.name}</span>
+                {a.isYou && <span className="leaderboard-you-tag">You</span>}
+              </div>
+              <div className="leaderboard-activity-row__text">
+                <strong>completed</strong> {a.label}
+              </div>
+              <div className="leaderboard-activity-row__meta">
+                {formatUkDateTime(a.occurredAt)}
+              </div>
             </div>
-            <div className="leaderboard-activity-row__text">
-              <strong>{a.verb}</strong> {a.target} <span className="text-[#657777]">— {a.context}</span>
-            </div>
-            <div className="leaderboard-activity-row__meta">
-              {a.time}
-              <span className="leaderboard-activity-row__dot" />
-            </div>
-          </div>
-        ))}
+          ))
+        )}
       </section>
     </>
+  );
+}
+function TaskTextField({ label, value, onSave, multiline = false }: { label: string; value: string; onSave: (value: string) => void; multiline?: boolean }) {
+  const field = useAutosaveField(value, onSave);
+  return (
+    <label className="mt-4 grid gap-1 font-semibold">
+      {label}
+      {multiline ? (
+        <textarea className="min-h-28 rounded border p-2" value={field.value} onChange={(e) => field.onChange(e.target.value)} onBlur={field.onBlur} />
+      ) : (
+        <input value={field.value} onChange={(e) => field.onChange(e.target.value)} onBlur={field.onBlur} />
+      )}
+    </label>
   );
 }
 function Tasks({ system = false }: { system?: boolean }) {
@@ -1161,7 +1415,7 @@ function Tasks({ system = false }: { system?: boolean }) {
     const update = (patch: any) =>
       dispatch({
         type: "UPSERT",
-        payload: { collection, item: { ...task, ...patch } },
+        payload: { collection, item: { id: task.id, ...patch } },
       });
     const detailFields = system
       ? [
@@ -1179,37 +1433,31 @@ function Tasks({ system = false }: { system?: boolean }) {
           ["validation", "Validation"], ["errors", "Error handling"], ["tests", "Test cases"],
           ["notes", "Design notes"], ["link", "Repository link"], ["improvement", "Next improvement"],
         ];
-    if (system) return <SystemDesignDetail task={task} update={update} learningItems={state.learningItems} dispatch={dispatch} onDelete={() => confirm("Delete this task?") && dispatch({ type: "DELETE", payload: { collection, id: task.id } })} onBack={() => nav("/system-design/hello-interview")} />;
+    if (system) return <SystemDesignDetail key={task.id} task={task} update={update} learningItems={state.learningItems} dispatch={dispatch} onDelete={() => confirm("Delete this task?") && dispatch({ type: "DELETE", payload: { collection, id: task.id } })} onBack={() => nav("/system-design/hello-interview")} />;
     return (
       <>
-        <PageHeader title={task.title}>
-          <button
-            onClick={() =>
-              nav(
-                system
-                  ? "/system-design/hello-interview"
-                  : "/functional-coding",
-              )
-            }
-          >
-            ← Back
-          </button>
-        </PageHeader>
+        <button
+          className="mb-3"
+          onClick={() =>
+            nav(
+              system
+                ? "/system-design/hello-interview"
+                : "/functional-coding",
+            )
+          }
+        >
+          ← Back
+        </button>
+        <PageHeader title={task.title} />
         <section className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(320px,1fr)]">
           <div className="lc-panel rounded-xl border bg-white p-5">
             <p className="mb-4 text-sm text-[#657777]">
               Edit the exercise context and design notes. Changes save when you
               leave a field.
             </p>
-            <label className="grid gap-1 font-semibold">
-              Category
-              <input
-                defaultValue={task.category}
-                onBlur={(e) => update({ category: e.target.value })}
-              />
-            </label>
-            {!system && <label className="mt-4 grid gap-1 font-semibold">Tags<input defaultValue={String(task.tags || "")} onBlur={(e) => update({ tags: e.target.value })} /></label>}
-            {detailFields.map(([key, label]) => <label className="mt-4 grid gap-1 font-semibold" key={key}>{label}<textarea className="min-h-28 rounded border p-2" defaultValue={String(task[key] || "")} onBlur={(e) => update({ [key]: e.target.value })} /></label>)}
+            <TaskTextField key={`${task.id}-category`} label="Category" value={task.category} onSave={(value) => update({ category: value })} />
+            {!system && <TaskTextField key={`${task.id}-tags`} label="Tags" value={String(task.tags || "")} onSave={(value) => update({ tags: value })} />}
+            {detailFields.map(([key, label]) => <TaskTextField key={`${task.id}-${key}`} label={label} value={String(task[key] || "")} onSave={(value) => update({ [key]: value })} multiline />)}
             <button
               className="mt-5 rounded border px-3 py-2 text-[#923d36]"
               onClick={() =>
@@ -1316,41 +1564,43 @@ function Tasks({ system = false }: { system?: boolean }) {
   }
   return (
     <>
-      <PageHeader title={system ? "System Design" : "Functional Coding"} />
+      <PageHeader title={system ? "System Design" : "Practical Coding"} />
       {domain(
         state,
-        system ? "System Design" : "Functional Coding",
+        system ? "System Design" : "Practical Coding",
         system ? "SYSTEM_DESIGN" : "FUNCTIONAL_CODING",
       )}
-      <form
-        className="mb-3 flex gap-2"
-        onSubmit={(e) => {
-          e.preventDefault();
-          if (title) {
-            const item = {
-              id: crypto.randomUUID(),
-              title,
-              category: system ? "System design" : "Backend exercise",
-              status: "NOT_STARTED",
-              attempts: [],
-              statement: "",
-              notes: "",
-            };
-            dispatch({ type: "UPSERT", payload: { collection, item } });
-            setTitle("");
-          }
-        }}
-      >
-        <input
-          className="rounded border p-2"
-          placeholder="New task"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-        />
-        <button className="rounded bg-teal-700 px-3 text-white">
-          Add task
-        </button>
-      </form>
+      {!system && (
+        <form
+          className="mb-3 flex gap-2"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (title) {
+              const item = {
+                id: crypto.randomUUID(),
+                title,
+                category: "Backend exercise",
+                status: "NOT_STARTED",
+                attempts: [],
+                statement: "",
+                notes: "",
+              };
+              dispatch({ type: "UPSERT", payload: { collection, item } });
+              setTitle("");
+            }
+          }}
+        >
+          <input
+            className="rounded border p-2"
+            placeholder="New task"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+          />
+          <button className="rounded bg-teal-700 px-3 text-white">
+            Add task
+          </button>
+        </form>
+      )}
       <section className="task-table lc-panel overflow-x-auto rounded-xl border bg-white p-4">
         <table className="w-full min-w-[720px] text-left text-sm">
           <thead className="border-b text-xs uppercase tracking-wide text-[#657777]">
@@ -1379,6 +1629,7 @@ function Tasks({ system = false }: { system?: boolean }) {
 function SystemDesignDetail({ task, update, onDelete, onBack, learningItems, dispatch }: { task: any; update: (patch: any) => void; onDelete: () => void; onBack: () => void; learningItems: any[]; dispatch: any }) {
   const [questionText, setQuestionText] = useState("");
   const [attemptOpen, setAttemptOpen] = useState(false);
+  const notesField = useAutosaveField(String(task.notes || ""), (value) => update({ notes: value }));
   const attempts = Array.isArray(task.attempts) ? task.attempts : [];
   const questions = learningItems.filter((x: any) => x.domain === "SYSTEM_DESIGN" && x.track === task.id);
   const addQuestion = (event: FormEvent<HTMLFormElement>) => {
@@ -1399,22 +1650,33 @@ function SystemDesignDetail({ task, update, onDelete, onBack, learningItems, dis
     });
     setQuestionText("");
   };
+  const logInterviewReady = () => {
+    const today = localDate();
+    dispatch({ type: "UPSERT", payload: { collection: "activities", item: { id: `activity-${task.id}-${today}`, date: today, domain: "SYSTEM_DESIGN", itemId: task.id, label: task.title, result: "PASS", durationMinutes: 0 } } });
+  };
   const addAttempt = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     const result = String(form.get("result"));
-    update({ attempts: [...attempts, { id: crypto.randomUUID(), date: String(form.get("date")), duration: Number(form.get("duration")), result, notes: String(form.get("notes")) }], status: result === "PASS" ? "INTERVIEW_READY" : "IN_PROGRESS" });
+    const nextStatus = result === "PASS" ? "INTERVIEW_READY" : "IN_PROGRESS";
+    const wasNotReady = task.status !== "INTERVIEW_READY";
+    update({ attempts: [...attempts, { id: crypto.randomUUID(), date: String(form.get("date")), duration: Number(form.get("duration")), result, notes: String(form.get("notes")) }], status: nextStatus });
+    if (nextStatus === "INTERVIEW_READY" && wasNotReady) logInterviewReady();
     setAttemptOpen(false);
   };
   return <>
-    <button className="mb-3" onClick={onBack}>← Back to exercises</button>
+    <button className="mb-3" onClick={onBack}>← Back</button>
     <PageHeader title={task.title} />
     <p className="mb-5 text-sm text-[#657777]">{task.category} · Capture what you learned, questions to revisit, and every practice run.</p>
     <StatusPicker
       title="Have you done this mock interview?"
       value={task.status === "LEARNING" || task.status === "RETRY_DUE" ? "IN_PROGRESS" : task.status || "NOT_STARTED"}
       options={["NOT_STARTED", "IN_PROGRESS", "INTERVIEW_READY"]}
-      onChange={(status) => update({ status })}
+      onChange={(status) => {
+        const wasNotReady = task.status !== "INTERVIEW_READY";
+        update({ status });
+        if (status === "INTERVIEW_READY" && wasNotReady) logInterviewReady();
+      }}
     />
     <section className="lc-panel mb-4 rounded-xl border bg-white p-5">
       <h2 className="font-bold">Questions</h2>
@@ -1428,7 +1690,7 @@ function SystemDesignDetail({ task, update, onDelete, onBack, learningItems, dis
     <section className="lc-panel mb-4 rounded-xl border bg-white p-5">
       <h2 className="font-bold">Learning notes</h2>
       <p className="mb-3 text-sm text-[#657777]">Key decisions, trade-offs, and improvements for next time.</p>
-      <textarea aria-label="Learning notes" className="min-h-48 w-full" defaultValue={String(task.notes || "")} placeholder="For example: clarify requirements first, estimate peak traffic, and explain the cache invalidation strategy…" onBlur={(event) => update({ notes: event.target.value })} />
+      <textarea aria-label="Learning notes" className="min-h-48 w-full" value={notesField.value} placeholder="For example: clarify requirements first, estimate peak traffic, and explain the cache invalidation strategy…" onChange={(event) => notesField.onChange(event.target.value)} onBlur={notesField.onBlur} />
     </section>
     <section className="lc-panel mb-4 rounded-xl border bg-white p-5">
       <div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-bold">Attempt record</h2><p className="text-sm text-[#657777]">Record the outcome and what to improve after each practice.</p></div><button className="bg-[#21675d] text-white" onClick={() => setAttemptOpen(!attemptOpen)}>{attemptOpen ? "Cancel" : "Record attempt"}</button></div>
@@ -1446,10 +1708,16 @@ function Motivation() {
     [draft, setDraft] = useState("");
   const sections = [
     "Benefits of changing jobs",
-    "Costs of staying",
     "Costs of changing jobs",
     "Benefits of staying",
+    "Costs of staying",
   ];
+  const sectionPrompts: Record<string, string> = {
+    "Benefits of changing jobs": "What would I gain by changing jobs?",
+    "Costs of changing jobs": "What would changing jobs cost me?",
+    "Benefits of staying": "What do I gain by staying?",
+    "Costs of staying": "What does staying cost me?",
+  };
   const add = () => {
     if (!text.trim()) return;
     dispatch({
@@ -1468,7 +1736,7 @@ function Motivation() {
   };
   return (
     <>
-      <PageHeader title="Motivation" />
+      <PageHeader title="Decision Balance" />
       <p className="mb-4 text-slate-600">
         This is a reminder of why the plan matters, not a way to guilt yourself into working.
       </p>
@@ -1497,7 +1765,7 @@ function Motivation() {
         {sections.map((sectionName) => {
           const entries = state.motivationEntries.filter((entry: any) => entry.section === sectionName).sort((a: any, b: any) => a.order - b.order);
           return <section className="motivation-list rounded-xl border bg-white p-4" key={sectionName}>
-            <h2 className="mb-2 font-bold">{sectionName}</h2>
+            <h2 className="mb-2 font-bold">{sectionPrompts[sectionName]}</h2>
             {entries.length === 0 ? <p className="py-3 text-sm text-[#657777]">No entries yet.</p> : entries.map((x: any) => (
               <div className="flex items-center gap-2 border-b py-3" key={x.id}>
                 {editing === x.id ? <><input className="flex-1 rounded border p-1" value={draft} onChange={(e) => setDraft(e.target.value)} /><button onClick={() => { dispatch({ type: "UPSERT", payload: { collection: "motivationEntries", item: { ...x, text: draft } } }); setEditing(null); }}>Save</button><button onClick={() => setEditing(null)}>Cancel</button></> : <><span className="flex-1">{x.text}</span><button onClick={() => { setEditing(x.id); setDraft(x.text); }}>Edit</button><button onClick={() => confirm("Delete this entry?") && dispatch({ type: "DELETE", payload: { collection: "motivationEntries", id: x.id } })}>Delete</button></>}
@@ -1509,39 +1777,52 @@ function Motivation() {
     </>
   );
 }
+// Keyed by pathname so navigating to a different page remounts a fresh boundary (recovering
+// from a crash without needing a full reload) — the Reload button inside ErrorBoundary is
+// the guaranteed fallback for when the crash is on the current route itself.
+function RoutedContent() {
+  const { pathname } = useLocation();
+  return (
+    <ErrorBoundary key={pathname}>
+      <Routes>
+        <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/motivation" element={<Motivation />} />
+        <Route path="/weekly-plan" element={<WeeklyPlan />} />
+        <Route path="/calendar" element={<CalendarPage />} />
+        <Route path="/behaviour" element={<Questions kind="BEHAVIOUR" />} />
+        <Route path="/java" element={<Questions kind="JAVA_THEORY" />} />
+        <Route path="/dsa" element={<Dsa />} />
+        <Route path="/dsa/:id" element={<DsaDetail />} />
+        <Route path="/functional-coding" element={<Tasks />} />
+        <Route path="/functional-coding/:id" element={<Tasks />} />
+        <Route path="/system-design" element={<SystemDesignPage />} />
+        <Route path="/backup" element={<Backup />} />
+        <Route path="/leaderboard" element={<LeaderboardPage />} />
+        <Route
+          path="/system-design/ddia/:chapterId"
+          element={<Questions kind="DDIA" />}
+        />
+        <Route
+          path="/system-design/hello-interview"
+          element={<HelloInterviewPage />}
+        />
+        <Route
+          path="/system-design/hello-interview/:id"
+          element={<Tasks system />}
+        />
+      </Routes>
+    </ErrorBoundary>
+  );
+}
 export default function App() {
   return (
+    <LeaderboardSyncProvider>
     <HashRouter>
       <Shell>
-        <Routes>
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/motivation" element={<Motivation />} />
-          <Route path="/weekly-plan" element={<WeeklyPlan />} />
-          <Route path="/calendar" element={<CalendarPage />} />
-          <Route path="/behaviour" element={<Questions kind="BEHAVIOUR" />} />
-          <Route path="/java" element={<Questions kind="JAVA_THEORY" />} />
-          <Route path="/dsa" element={<Dsa />} />
-          <Route path="/dsa/:id" element={<DsaDetail />} />
-          <Route path="/functional-coding" element={<Tasks />} />
-          <Route path="/functional-coding/:id" element={<Tasks />} />
-          <Route path="/system-design" element={<SystemDesignPage />} />
-          <Route path="/backup" element={<Backup />} />
-          <Route path="/leaderboard" element={<LeaderboardPage />} />
-          <Route
-            path="/system-design/ddia/:chapterId"
-            element={<Questions kind="DDIA" />}
-          />
-          <Route
-            path="/system-design/hello-interview"
-            element={<HelloInterviewPage />}
-          />
-          <Route
-            path="/system-design/hello-interview/:id"
-            element={<Tasks system />}
-          />
-        </Routes>
+        <RoutedContent />
       </Shell>
     </HashRouter>
+    </LeaderboardSyncProvider>
   );
 }

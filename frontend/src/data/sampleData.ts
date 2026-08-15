@@ -13,6 +13,10 @@ const question = (
 const review = (id: string, stage: any, days: number) => ({ id, stage, dueAt: addDays(days), completed: false, completedAt: null, note: "" });
 const functionalTitles = ["Booking API", "Payment Service", "Notification Service", "Inventory Reservation", "Rate Limiter"];
 const designTitles = ["Bitly", "Dropbox", "Yelp", "Local Delivery Service", "Ticketmaster", "Instagram", "FB News Feed", "Tinder", "LeetCode", "WhatsApp", "Strava", "Distributed Cache", "Rate Limiter", "Online Auction", "YouTube", "Job Scheduler", "FB Live Comments", "News Aggregator", "Price Tracking Service", "Notification System", "YouTube Top K", "Uber", "Robinhood", "Google Docs", "Web Crawler", "Ad Click Aggregator", "FB Post Search", "Payment System", "Metrics Monitoring", "Online Chess", "ChatGPT"];
+// Reused by the Firestore seeding logic (Phase 2G) so a new user's Hello Interview /
+// Functional Coding task lists are generated from the same source of truth as sampleData().
+export const BUILT_IN_HELLO_INTERVIEW_TITLES = designTitles;
+export const STARTER_FUNCTIONAL_TASK_TITLES = functionalTitles;
 const slugOverrides: Record<string, string> = { "Pow(x, n)": "powx-n" };
 const slug = (title: string) => slugOverrides[title] || title.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 
@@ -33,7 +37,7 @@ export const sampleData = (): AppState => {
     activities: [{ id: "activity-1", date: localDate(), domain: "JAVA_THEORY", itemId: "java-core-1", label: "equals and hashCode practice", result: "PARTIAL", durationMinutes: 8 }, { id: "activity-2", date: addDays(-1), domain: "BEHAVIOUR", itemId: "behaviour-2", label: "Production incident story", result: "FAIL", durationMinutes: 12 }, { id: "activity-3", date: addDays(-2), domain: "FUNCTIONAL_CODING", itemId: "functional-1", label: "Booking API attempted", result: "PARTIAL", durationMinutes: 75 }],
     priorities: [], dismissedAutomaticPriorities: [],
     functionalTasks: functionalTitles.map((title, i) => ({ id: `functional-${i + 1}`, title, category: "Backend exercise", tags: "Java, API, testing", statement: `Design and implement a small ${title}.`, requirements: "Clear HTTP API and business rules.", nonFunctional: "Validation, observability, testability.", entities: "", services: "", repositories: "", api: "", validation: "", errors: "", tests: "", notes: "", link: "", improvement: "", status: i === 0 ? "LEARNING" : "NOT_STARTED", attempts: i === 0 ? [{ id: "fa-1", date: addDays(-2), duration: 75, result: "PARTIAL" as const, notes: "Core path complete; validation needs work." }] : [] })),
-    systemDesignTasks: designTitles.map((title, i) => ({ id: `design-${i + 1}`, title, category: "System design", statement: `Design a scalable ${title}.`, notes: "", status: i === 0 ? "IN_PROGRESS" : "NOT_STARTED", attempts: [] })),
+    systemDesignTasks: designTitles.map((title, i) => ({ id: `design-${i + 1}`, title, category: "System design", statement: `Design a scalable ${title}.`, notes: "", status: i === 0 ? "IN_PROGRESS" : "NOT_STARTED", attempts: [], source: "BUILT_IN" as const })),
     ddiaChapters: [],
   };
 };
